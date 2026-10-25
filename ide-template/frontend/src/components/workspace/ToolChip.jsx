@@ -33,6 +33,7 @@ const INTEGRATION_LOGOS = {
   gslides: 'gslides.svg',
   gcalendar: 'gcalendar.svg',
   gtasks: 'gtasks.svg',
+  gchat: 'gchat.svg',
   gdrive: 'gdrive.svg',
   ga4: 'ga4.svg',
   gemini: 'gemini.svg',

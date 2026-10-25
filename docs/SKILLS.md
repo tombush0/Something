@@ -159,6 +159,7 @@ ide-template/skills/
     ├── ask-gemini/, ask-gpt/, ask-grok/    ← per-model "ask the AI" wrappers
     ├── email-write-protocol/                ← email send/reply confirmation hierarchy
     ├── gcalendar/, gdocs/, gdrive/, gsheets/, gslides/, gtasks/  ← Google Workspace
+    ├── gchat/                               ← Google Chat
     ├── google-ads/{campaigns,copy,negatives,report}/
     ├── image-generation-{nano-banana,seedream}/   ← BYTEPLUS_API_KEY or GEMINI_API_KEY
     ├── meta/{ads-campaigns,ads-report,ads-audiences}/

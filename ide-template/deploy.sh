@@ -602,6 +602,11 @@ for svc in gsheets gcalendar gdrive gslides gtasks; do
   ship "apps/${svc}-mcp/package.json" "$HETZNER_HOST:$REMOTE_PATH/apps/${svc}-mcp/" || exit 1
 done
 
+# Google Chat MCP — its own tile and OAuth client (not part of the bundle
+# above), so Chat can be revoked without touching Docs/Drive/Calendar.
+ship apps/gchat-mcp/index.js     "$HETZNER_HOST:$REMOTE_PATH/apps/gchat-mcp/" || exit 1
+ship apps/gchat-mcp/package.json "$HETZNER_HOST:$REMOTE_PATH/apps/gchat-mcp/" || exit 1
+
 # Lockfiles: every app that has one next to its package.json gets it shipped,
 # so the build installs the versions that were tested rather than whatever
 # resolves on build day. Runs after every apps/ directory above exists on

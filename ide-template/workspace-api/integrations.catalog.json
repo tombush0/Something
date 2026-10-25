@@ -1727,6 +1727,85 @@
       "tagline": "Docs, Sheets, Drive, Calendar"
     },
     {
+      "id": "google-chat",
+      "label": "Google Chat",
+      "logo": "/integrations/gchat.svg",
+      "description": "Spaces, group chats and DMs: read what was said, see who is in a space and send messages as you.",
+      "category": "messaging",
+      "fields": [
+        {
+          "name": "GCHAT_CLIENT_ID",
+          "label": "OAuth Client ID",
+          "type": "secret",
+          "placeholder": "...apps.googleusercontent.com",
+          "helper": "From your own Google Cloud OAuth client (Web application type)."
+        },
+        {
+          "name": "GCHAT_CLIENT_SECRET",
+          "label": "OAuth Client Secret",
+          "type": "secret",
+          "placeholder": "GOCSPX-...",
+          "helper": "Same OAuth client. Pair with the Client ID above."
+        },
+        {
+          "name": "GCHAT_REFRESH_TOKEN",
+          "label": "Refresh token",
+          "type": "secret",
+          "placeholder": "1//0...",
+          "helper": "Generate via OAuth Playground (instructions in step 3)."
+        },
+        {
+          "name": "GCHAT_ALLOW_WRITE",
+          "label": "Allow bot to send Google Chat messages as you",
+          "type": "select",
+          "default": "no",
+          "options": [
+            {
+              "value": "yes",
+              "label": "Read and send"
+            },
+            {
+              "value": "no",
+              "label": "Read only"
+            }
+          ],
+          "helper": "Messages go out under your own name. Read only lets the bot read spaces and DMs but never post."
+        }
+      ],
+      "steps": [
+        {
+          "title": "Enable and configure the Chat API",
+          "body": "[console.cloud.google.com](https://console.cloud.google.com), the project you use for Google Workspace → **APIs & Services** → **Library** → enable **Google Chat API**. Then open **Google Chat API** → **Configuration** and fill in an app name, avatar URL and description, and save. Google refuses every Chat call until this page is saved, even for user access."
+        },
+        {
+          "title": "Create an OAuth client",
+          "body": "Same project → **APIs & Services** → **Credentials** → **Create OAuth client ID** → **Web application**, redirect URI `https://developers.google.com/oauthplayground`. Copy the **Client ID** and **Client Secret**."
+        },
+        {
+          "title": "Generate the refresh token",
+          "body": "Open [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground) → **⚙** → **Use your own OAuth credentials** → paste the Client ID and Secret. In **Step 1** paste these scopes:\n\n```\nhttps://www.googleapis.com/auth/chat.spaces.readonly\nhttps://www.googleapis.com/auth/chat.memberships.readonly\nhttps://www.googleapis.com/auth/chat.messages\n```\n\nFor read only, use `chat.messages.readonly` instead of `chat.messages`. **Authorize APIs** → sign in with the account whose chats the bot should see → **Allow** → **Exchange authorization code for tokens** → copy the `refresh_token`."
+        }
+      ],
+      "mcp": {
+        "command": "node",
+        "args": [
+          "{appsDir}/gchat-mcp/index.js"
+        ],
+        "envMap": {
+          "GCHAT_CLIENT_ID": "GCHAT_CLIENT_ID",
+          "GCHAT_CLIENT_SECRET": "GCHAT_CLIENT_SECRET",
+          "GCHAT_REFRESH_TOKEN": "GCHAT_REFRESH_TOKEN",
+          "GCHAT_ALLOW_WRITE": "GCHAT_ALLOW_WRITE"
+        },
+        "name": "gchat",
+        "allowedHosts": [
+          "chat.googleapis.com",
+          "oauth2.googleapis.com"
+        ]
+      },
+      "tagline": "Spaces, DMs, messages"
+    },
+    {
       "id": "docs-comments",
       "label": "Docs Comments",
       "logo": "/integrations/docs-comments.svg",

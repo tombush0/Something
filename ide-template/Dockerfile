@@ -472,6 +472,9 @@ RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/gslides-mcp && npm ci 
 COPY apps/gtasks-mcp /opt/ide/apps/gtasks-mcp
 RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/gtasks-mcp && npm ci --omit=dev --no-audit --no-fund
 
+COPY apps/gchat-mcp /opt/ide/apps/gchat-mcp
+RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/gchat-mcp && npm ci --omit=dev --no-audit --no-fund
+
 COPY apps/x-mcp /opt/ide/apps/x-mcp
 RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/x-mcp && npm ci --omit=dev --no-audit --no-fund
 
