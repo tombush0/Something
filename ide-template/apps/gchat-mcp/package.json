@@ -1,7 +1,7 @@
 {
   "name": "gchat-mcp",
-  "version": "1.0.0",
-  "description": "Google Chat MCP — list spaces/DMs, read messages and members, send messages via Chat API v1 with user OAuth.",
+  "version": "1.1.0",
+  "description": "Google Chat MCP — spaces/DMs, messages, search, read state, reactions, attachments and members via Chat API v1 with user OAuth.",
   "type": "module",
   "main": "index.js",
   "scripts": {

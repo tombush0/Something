@@ -28,7 +28,7 @@ English baseline; translate to the user's working language.
 | `gdrive` | Google Drive — file storage, sharing |
 | `gslides` | Google Slides — decks, slides |
 | `gtasks` | Google Tasks — todo lists |
-| `gchat` | Google Chat — spaces, DMs, send as the user |
+| `gchat` | Google Chat — spaces, DMs, search, unread, send/edit, reactions, files, members |
 | `x` / `x-mcp` | X (Twitter) — read tweets, search, profiles |
 | `workspace-api` | Workspace tools — searching what we know and what happened (`memory_search`, `memory_timeline`) |
 

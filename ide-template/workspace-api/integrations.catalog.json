@@ -1730,7 +1730,7 @@
       "id": "google-chat",
       "label": "Google Chat",
       "logo": "/integrations/gchat.svg",
-      "description": "Spaces, group chats and DMs: read what was said, see who is in a space and send messages as you.",
+      "description": "Spaces, group chats and DMs: read, search and catch up on unread, send and edit messages, react, share files and manage spaces as you.",
       "category": "messaging",
       "fields": [
         {
@@ -1756,20 +1756,20 @@
         },
         {
           "name": "GCHAT_ALLOW_WRITE",
-          "label": "Allow bot to send Google Chat messages as you",
+          "label": "Allow bot to act in Google Chat as you",
           "type": "select",
           "default": "no",
           "options": [
             {
               "value": "yes",
-              "label": "Read and send"
+              "label": "Read and act"
             },
             {
               "value": "no",
               "label": "Read only"
             }
           ],
-          "helper": "Messages go out under your own name. Read only lets the bot read spaces and DMs but never post."
+          "helper": "Sending, editing, deleting, reacting, marking read and managing spaces all happen under your own name. Read only lets the bot read and search but change nothing."
         }
       ],
       "steps": [
@@ -1783,7 +1783,7 @@
         },
         {
           "title": "Generate the refresh token",
-          "body": "Open [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground) → **⚙** → **Use your own OAuth credentials** → paste the Client ID and Secret. In **Step 1** paste these scopes:\n\n```\nhttps://www.googleapis.com/auth/chat.spaces.readonly\nhttps://www.googleapis.com/auth/chat.memberships.readonly\nhttps://www.googleapis.com/auth/chat.messages\n```\n\nFor read only, use `chat.messages.readonly` instead of `chat.messages`. **Authorize APIs** → sign in with the account whose chats the bot should see → **Allow** → **Exchange authorization code for tokens** → copy the `refresh_token`."
+          "body": "Open [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground) → **⚙** → **Use your own OAuth credentials** → paste the Client ID and Secret. In **Step 1** paste these scopes:\n\n```\nhttps://www.googleapis.com/auth/chat.spaces.readonly\nhttps://www.googleapis.com/auth/chat.spaces.create\nhttps://www.googleapis.com/auth/chat.memberships\nhttps://www.googleapis.com/auth/chat.messages\nhttps://www.googleapis.com/auth/chat.messages.reactions\nhttps://www.googleapis.com/auth/chat.users.readstate\n```\n\nFor read only, use `chat.spaces.readonly`, `chat.memberships.readonly`, `chat.messages.readonly`, `chat.messages.reactions.readonly` and `chat.users.readstate.readonly` instead. **Authorize APIs** → sign in with the account whose chats the bot should see → **Allow** → **Exchange authorization code for tokens** → copy the `refresh_token`."
         }
       ],
       "mcp": {
