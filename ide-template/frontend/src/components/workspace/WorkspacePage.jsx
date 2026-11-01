@@ -473,8 +473,11 @@ export default function WorkspacePage() {
         className={cn(
           // No overflow clipping: the rail's user menu opens out to the right of
           // it. The width is not animated: the editor would reflow on every
-          // frame of the fold, text shifting as it goes.
-          'relative z-30 shrink-0',
+          // frame of the fold, text shifting as it goes. Its z-index is a
+          // stacking context: the floating sidebar's own z-50 counts only
+          // inside it, so this wrapper must itself clear the z-40 backdrop.
+          'relative shrink-0',
+          sidebarOverlay && sidebarOpen ? 'z-50' : 'z-30',
           isMobile && !sidebarOpen && 'hidden',
         )}
         style={isMobile ? undefined : { width: sidebarOverlay ? SIDEBAR_RAIL : sidebarOpen ? SIDEBAR_WIDTH : SIDEBAR_RAIL }}
