@@ -443,6 +443,10 @@ export default function chatRouter() {
         ...page,
         sessionId: sid,
         summary: { active: s?.messageCount || 0 },
+        // A turn outlives its browser stream: switching chats closes the stream
+        // while the turn runs on, and its reply reaches the history only when
+        // it ends. This tells a reopened chat there is more to wait for.
+        running: activeBySession.has(sid),
       });
     } catch (err) {
       res.status(500).json({ error: err.message });

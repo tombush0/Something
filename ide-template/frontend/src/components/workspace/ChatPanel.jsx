@@ -60,6 +60,8 @@ function useVisualViewport() {
 //   onTurnDone(text)  → the finished assistant text of each turn
 // plus the window events `ide:chat-attach` { files } and `ide:chat-send`
 // { text, files }. The workspace itself passes none of these.
+const WATCH_POLL_MS = 2500;
+
 export default function ChatPanel({ sessionId, onFileSelect, initialMessage, onInitialMessageConsumed, resetNonce = 0, extraFields, composerAccessory, onTurnDone }) {
   // sessionId is required by Phase 2 backend, but we tolerate undefined for
   // a brief render between ChatPane mount and the sessions fetch returning —
@@ -80,6 +82,9 @@ export default function ChatPanel({ sessionId, onFileSelect, initialMessage, onI
   const [messages, setMessages] = useState(seed);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // Reopened mid-turn: the turn runs on the server with no stream to this
+  // panel, so the history is polled until it ends (see the effect below).
+  const [watching, setWatching] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [isDragging, setIsDragging]   = useState(false);
   // Lazy-load state for older history pages.
@@ -159,11 +164,48 @@ export default function ChatPanel({ sessionId, onFileSelect, initialMessage, onI
         setMessages(prev => prev.length > 0 && !placeholder ? prev : restored);
         setHasMore(!!data.hasMore);
         if (restored.length) oldestTsRef.current = restored[0].ts;
+        // A running turn with no stream here started before this panel did
+        // (the chat was left and reopened). Its reply is not in the history
+        // yet: show it as working and wait for it. abortRef set means this
+        // panel's own send owns the turn.
+        if (data.running && !abortRef.current) {
+          setBusy(true);
+          setWatching(true);
+          setMessages(prev => [...prev, { role: 'assistant', text: '', images: [], content: [], tools: [], live: true, id: nextMsgId('a'), state: 'streaming' }]);
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setHistoryLoading(false); });
     return () => { cancelled = true; };
   }, [sessionId, historyUrl]);
+
+  // Poll a reopened chat until its turn ends, then show what was saved. Stop
+  // goes through here too: the server ends the turn and the next poll settles
+  // the panel with the partial reply the server kept.
+  useEffect(() => {
+    if (!watching) return;
+    let cancelled = false;
+    let timer = null;
+    const tick = async () => {
+      try {
+        const r = await fetch(historyUrl);
+        const data = r.ok ? await r.json() : null;
+        if (cancelled) return;
+        if (data && !data.running) {
+          const restored = (data.messages || []).map((m, i) => mapEntry(m, i, 'w'));
+          setMessages(restored);
+          setHasMore(!!data.hasMore);
+          oldestTsRef.current = restored.length ? restored[0].ts : null;
+          setWatching(false);
+          setBusy(false);
+          return;
+        }
+      } catch { /* the next poll retries */ }
+      if (!cancelled) timer = setTimeout(tick, WATCH_POLL_MS);
+    };
+    timer = setTimeout(tick, WATCH_POLL_MS);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [watching, historyUrl]);
 
   // Extension panel: remember this screen for the next open (no-op elsewhere).
   useEffect(() => {
@@ -268,6 +310,7 @@ export default function ChatPanel({ sessionId, onFileSelect, initialMessage, onI
     genRef.current++;
     abortRef.current?.abort();
     setBusy(false);
+    setWatching(false);
     fetch(historyUrl)
       .then(r => r.ok ? r.json() : { messages: [], hasMore: false })
       .then(data => {
@@ -336,6 +379,7 @@ export default function ChatPanel({ sessionId, onFileSelect, initialMessage, onI
       interruptOrDropLastAssistant();
       abortRef.current?.abort();
     }
+    setWatching(false);
 
     const filesToSend = explicit !== undefined
       ? (Array.isArray(forcedFiles) ? forcedFiles : [])
