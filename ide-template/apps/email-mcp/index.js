@@ -30,6 +30,8 @@
  *   search                — Gmail-syntax (X-GM-RAW) or simple field search
  *   read_message          — full message: headers, body_text, body_html, attachment metadata
  *   download_attachment   — fetch one attachment to /tmp, return path
+ *
+ * Outgoing attachments (send_email, reply, forward, create_draft): see ./attachments.js.
  * ─────────────────────────────────────────────
  */
 
@@ -43,6 +45,7 @@ import { readFileSync, mkdirSync, writeFileSync, readdirSync, statSync, rmSync, 
 import { join, resolve, basename }                      from 'path';
 import { loadCredentials } from '../_shared/broker-client.js';
 import { wrapUntrusted }   from '../_shared/wrap-untrusted.js';
+import { resolveAttachments, carriedAttachments, downloadDirs, totalBytes } from './attachments.js';
 
 // Phase-2 broker — fetch credentials over UDS at startup if launched via
 // mcp-runner (uid 1002). No-op + return null when run standalone for
@@ -57,6 +60,7 @@ const ACCOUNTS_FILE  = process.env.EMAIL_ACCOUNTS_FILE ?? '/home/coder/.email/ac
 const TMP_DIR        = '/tmp/email-mcp';
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;       // 5 min — close idle IMAP connections
 const TMP_TTL_MS      = 60 * 60 * 1000;      // 1 h  — cleanup stale /tmp entries on boot
+const ATTACH_DIRS     = downloadDirs(TMP_DIR);
 
 let accounts;
 try {
@@ -658,12 +662,13 @@ async function fetchOriginal(client, folder, uid) {
       date:      parsed.date || msg.envelope?.date,
       text:      parsed.text || '',
       html:      parsed.html || '',
+      attachments: parsed.attachments || [],
       rawSource: msg.source,
     };
   });
 }
 
-async function toolSendEmail({ account, to, cc, bcc, subject, body, html }) {
+async function toolSendEmail({ account, to, cc, bcc, subject, body, html, attachments }) {
   if (!account)                   return errorReply('send_email: "account" is required');
   if (!accountsById.has(account)) return errorReply(`unknown account: "${account}"`);
   const blocked = checkSendAllowed(account, 'send_email');
@@ -672,6 +677,12 @@ async function toolSendEmail({ account, to, cc, bcc, subject, body, html }) {
   if (recipients.length === 0)    return errorReply('send_email: "to" must include at least one recipient');
   if (!subject)                   return errorReply('send_email: "subject" is required');
   if (!body)                      return errorReply('send_email: "body" is required');
+  let files;
+  try {
+    files = resolveAttachments(attachments, { dirs: ATTACH_DIRS });
+  } catch (err) {
+    return errorReply(`send_email: ${err.message}`);
+  }
 
   const acc = accountsById.get(account);
   const transporter = getSmtp(account);
@@ -685,6 +696,7 @@ async function toolSendEmail({ account, to, cc, bcc, subject, body, html }) {
     subject,
     text:    body,
     ...(html ? { html } : {}),
+    ...(files.length ? { attachments: files } : {}),
   });
 
   audit('send', account, {
@@ -693,6 +705,7 @@ async function toolSendEmail({ account, to, cc, bcc, subject, body, html }) {
     bcc: normaliseAddrList(bcc),
     subject,
     snippet: snippetForAudit(body),
+    attachments: files.map(a => a.filename),
     message_id: info.messageId || null,
   });
 
@@ -713,17 +726,24 @@ async function toolSendEmail({ account, to, cc, bcc, subject, body, html }) {
     from: fromAddr,
     to: recipients,
     subject,
+    attachments: files.map(a => a.filename),
     message_id: info.messageId || null,
   });
 }
 
-async function toolReply({ account, uid, folder = 'INBOX', body, html, reply_all = false }) {
+async function toolReply({ account, uid, folder = 'INBOX', body, html, reply_all = false, attachments }) {
   if (!account)                   return errorReply('reply: "account" is required');
   if (uid == null)                return errorReply('reply: "uid" is required');
   if (!accountsById.has(account)) return errorReply(`unknown account: "${account}"`);
   const blocked = checkSendAllowed(account, 'reply');
   if (blocked) return blocked;
   if (!body)                      return errorReply('reply: "body" is required');
+  let files;
+  try {
+    files = resolveAttachments(attachments, { dirs: ATTACH_DIRS });
+  } catch (err) {
+    return errorReply(`reply: ${err.message}`);
+  }
 
   const client = await getClient(account);
   const original = await fetchOriginal(client, folder, uid);
@@ -751,6 +771,7 @@ async function toolReply({ account, uid, folder = 'INBOX', body, html, reply_all
     subject:    subjectLine,
     text:       body,
     ...(html ? { html } : {}),
+    ...(files.length ? { attachments: files } : {}),
     inReplyTo:  original.messageId,
     references: original.messageId,
   });
@@ -762,6 +783,7 @@ async function toolReply({ account, uid, folder = 'INBOX', body, html, reply_all
     cc: allCc,
     subject: subjectLine,
     snippet: snippetForAudit(body),
+    attachments: files.map(a => a.filename),
     message_id: info.messageId || null,
   });
 
@@ -774,12 +796,13 @@ async function toolReply({ account, uid, folder = 'INBOX', body, html, reply_all
 
   return jsonReply({
     sent: true, account, to: recipients, cc: allCc, subject: subjectLine,
+    attachments: files.map(a => a.filename),
     message_id: info.messageId || null,
     in_reply_to: original.messageId,
   });
 }
 
-async function toolForward({ account, uid, folder = 'INBOX', to, cc, intro }) {
+async function toolForward({ account, uid, folder = 'INBOX', to, cc, intro, attachments }) {
   if (!account)                   return errorReply('forward: "account" is required');
   if (uid == null)                return errorReply('forward: "uid" is required');
   if (!accountsById.has(account)) return errorReply(`unknown account: "${account}"`);
@@ -808,6 +831,14 @@ async function toolForward({ account, uid, folder = 'INBOX', to, cc, intro }) {
   ].join('');
   const composedText = header + (original.text || '');
 
+  const carried = carriedAttachments(original.attachments);
+  let files;
+  try {
+    files = [...carried, ...resolveAttachments(attachments, { dirs: ATTACH_DIRS, alreadyBytes: totalBytes(carried) })];
+  } catch (err) {
+    return errorReply(`forward: ${err.message}`);
+  }
+
   const transporter = getSmtp(account);
   const info = await transporter.sendMail({
     from:    fromAddr,
@@ -815,6 +846,7 @@ async function toolForward({ account, uid, folder = 'INBOX', to, cc, intro }) {
     cc:      normaliseAddrList(cc),
     subject: subjectLine,
     text:    composedText,
+    ...(files.length ? { attachments: files } : {}),
   });
 
   audit('forward', account, {
@@ -823,6 +855,7 @@ async function toolForward({ account, uid, folder = 'INBOX', to, cc, intro }) {
     cc: normaliseAddrList(cc),
     subject: subjectLine,
     snippet: snippetForAudit(composedText),
+    attachments: files.map(a => a.filename),
     message_id: info.messageId || null,
   });
 
@@ -835,17 +868,24 @@ async function toolForward({ account, uid, folder = 'INBOX', to, cc, intro }) {
 
   return jsonReply({
     sent: true, account, to: recipients, subject: subjectLine,
+    attachments: files.map(a => a.filename),
     message_id: info.messageId || null,
   });
 }
 
-async function toolCreateDraft({ account, to, cc, subject, body, html, in_reply_to_uid, in_reply_to_folder = 'INBOX' }) {
+async function toolCreateDraft({ account, to, cc, subject, body, html, in_reply_to_uid, in_reply_to_folder = 'INBOX', attachments }) {
   if (!account)                   return errorReply('create_draft: "account" is required');
   if (!accountsById.has(account)) return errorReply(`unknown account: "${account}"`);
   const recipients = normaliseAddrList(to);
   if (recipients.length === 0)    return errorReply('create_draft: "to" must include at least one recipient');
   if (!subject)                   return errorReply('create_draft: "subject" is required');
   if (!body)                      return errorReply('create_draft: "body" is required');
+  let files;
+  try {
+    files = resolveAttachments(attachments, { dirs: ATTACH_DIRS });
+  } catch (err) {
+    return errorReply(`create_draft: ${err.message}`);
+  }
 
   const client = await getClient(account);
   const acc = accountsById.get(account);
@@ -869,6 +909,7 @@ async function toolCreateDraft({ account, to, cc, subject, body, html, in_reply_
     subject,
     text:    body,
     ...(html ? { html } : {}),
+    ...(files.length ? { attachments: files } : {}),
     ...(inReplyTo ? { inReplyTo, references } : {}),
   });
 
@@ -880,6 +921,7 @@ async function toolCreateDraft({ account, to, cc, subject, body, html, in_reply_
     cc: normaliseAddrList(cc),
     subject,
     snippet: snippetForAudit(body),
+    attachments: files.map(a => a.filename),
     in_reply_to: inReplyTo,
   });
 
@@ -889,6 +931,7 @@ async function toolCreateDraft({ account, to, cc, subject, body, html, in_reply_
     to: recipients,
     subject,
     folder: draftsFolder,
+    attachments: files.map(a => a.filename),
     in_reply_to: inReplyTo,
   });
 }
@@ -967,6 +1010,23 @@ async function toolDelete({ account, uid, folder = 'INBOX' }) {
 }
 
 // ─── Tool registration ─────────────────────────────────────────────────────
+
+const ATTACHMENTS_SCHEMA = {
+  type: 'array',
+  description:
+    'Files to attach, each a path from the workspace project or one a tool just downloaded ' +
+    '(download_attachment, Drive export or download). Other paths are refused. ' +
+    'Max 10 files, 18MB combined.',
+  items: {
+    type: 'object',
+    properties: {
+      path:     { type: 'string', description: 'Path to the file (required).' },
+      filename: { type: 'string', description: 'Name the recipient sees. Default: the file\'s own name.' },
+    },
+    required: ['path'],
+    additionalProperties: false,
+  },
+};
 
 const TOOLS = [
   {
@@ -1078,6 +1138,7 @@ const TOOLS = [
         subject: { type: 'string', description: 'Subject line (required).' },
         body:    { type: 'string', description: 'Plain-text body (required). Use \\n for newlines.' },
         html:    { type: 'string', description: 'Optional HTML body. When set, providers render this; plain `body` is the fallback for clients that prefer text.' },
+        attachments: ATTACHMENTS_SCHEMA,
       },
       required: ['account', 'to', 'subject', 'body'],
       additionalProperties: false,
@@ -1100,6 +1161,7 @@ const TOOLS = [
         body:      { type: 'string', description: 'Reply body in plain text (required).' },
         html:      { type: 'string', description: 'Optional HTML body.' },
         reply_all: { type: 'boolean', description: 'When true, also include the original cc list. Bot MUST surface the full recipient set during confirmation.' },
+        attachments: ATTACHMENTS_SCHEMA,
       },
       required: ['account', 'uid', 'body'],
       additionalProperties: false,
@@ -1110,7 +1172,7 @@ const TOOLS = [
     description:
       'Forward an existing message to new recipients via SMTP. STRONG-CONFIRM tool: ' +
       'bot must show the user the original message body + new recipients before sending. ' +
-      'Original attachments are preserved.',
+      'The original\'s attachments go along, in the 18MB limit; `attachments` adds more.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1120,6 +1182,7 @@ const TOOLS = [
         to:         { type: 'array', items: { type: 'string' }, description: 'Forward recipients (required).' },
         cc:         { type: 'array', items: { type: 'string' }, description: 'Optional cc.' },
         intro:      { type: 'string', description: 'Optional message prepended above the forwarded original (e.g. "FYI: looks relevant to your Q3 deck.").' },
+        attachments: ATTACHMENTS_SCHEMA,
       },
       required: ['account', 'uid', 'to'],
       additionalProperties: false,
@@ -1143,6 +1206,7 @@ const TOOLS = [
         html:       { type: 'string', description: 'Optional HTML body.' },
         in_reply_to_uid:    { type: 'number', description: 'Optional: uid of a message this draft replies to. Headers will thread the draft into that conversation.' },
         in_reply_to_folder: { type: 'string', description: 'Folder for in_reply_to_uid lookup. Default: inbox.' },
+        attachments: ATTACHMENTS_SCHEMA,
       },
       required: ['account', 'to', 'subject', 'body'],
       additionalProperties: false,

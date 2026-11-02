@@ -30,6 +30,7 @@ tool takes an `account` id, and `account: "*"` fans out across all accounts.
 | `search` | Gmail search syntax (X-GM-RAW) for Gmail accounts; field prefixes (`from:`, `to:`, `subject:`, `body:`) for non-Gmail. |
 | `read_message` | Full message: headers, body_text, body_html, attachment metadata. |
 | `download_attachment` | Stream one attachment to `/tmp/email-mcp/<account>/<uid>/<filename>`. Returns the path. |
+| `send_email`, `reply`, `forward`, `create_draft` | Take `attachments: [{ path, filename? }]`: files from the project or a tool's download directory only, 10 files and 18MB combined. `forward` also carries the original's attachments. |
 
 `list_recent`, `search`: pass `account: "*"` to query all accounts in parallel.
 `read_message`, `download_attachment`: require an explicit `account` (UIDs are per-account).

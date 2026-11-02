@@ -781,6 +781,7 @@ proxy_set_header X-IDE-User $ide_user;   # nginx — overwrites with auth-servic
 
 ✅ **Admin-only controls stay admin-only**
 - An MCP tool that reads a local file (a Drive upload, a Trello attachment, an image to edit) takes it from the project directory only, resolved through symlinks first (`apps/_shared/local-file.js`); the group `[[SEND_FILE]]` path resolves the same way before its containment check.
+- An email attachment follows the same rule, and may also come from the temp directories where the email, Drive, Chat and Trello tools leave their downloads (`apps/email-mcp/attachments.js`). That process can read the account passwords, so an unrestricted path would let a mail that talked the bot into attaching them carry them out.
 - Signing out ends the session everywhere it is checked: the UI records the sign-out (`POST /api/me/sign-out`), and a token issued before it — the cookie, a copy the extension holds — is refused by auth-service and workspace-api alike until a new sign-in.
 - `GET /api/integrations` needs a signed-in person and shows the credential summary (length, last characters) to admins only. The setup wizard, once an admin exists, is the admin's even before it is completed. A branding write needs a signed-in person even before the first admin exists; the public branding view names nobody.
 - A session belongs to someone on the roster: workspace-api checks the roster on every request, so a person removed from the team is a stranger at once (401 on the next call), not at their token's expiry; an empty roster (first run) refuses nobody.
