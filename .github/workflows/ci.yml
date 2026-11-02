@@ -47,6 +47,7 @@ jobs:
       - run: npm install --no-audit --no-fund --prefix ../auth-service
       - run: node ../auth-service/agents.test.js
       # Recurrence engine shared by reminder-mcp and the reminder monitor; no deps.
+      - run: node ../apps/email-mcp/attachments.test.mjs
       - run: node ../apps/reminder-mcp/recur.test.mjs
       - run: node ../apps/reminder-mcp/room-target.test.mjs
       # The planner's one-step plan swap, against the real server over stdio.

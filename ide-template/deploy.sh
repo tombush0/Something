@@ -510,6 +510,7 @@ ship apps/miniapp-mcp/package.json    "$HETZNER_HOST:$REMOTE_PATH/apps/miniapp-m
 ship apps/web-channel-mcp/index.js       "$HETZNER_HOST:$REMOTE_PATH/apps/web-channel-mcp/"   || exit 1
 ship apps/web-channel-mcp/package.json   "$HETZNER_HOST:$REMOTE_PATH/apps/web-channel-mcp/"   || exit 1
 ship apps/email-mcp/index.js     "$HETZNER_HOST:$REMOTE_PATH/apps/email-mcp/" || exit 1
+ship apps/email-mcp/attachments.js "$HETZNER_HOST:$REMOTE_PATH/apps/email-mcp/" || exit 1
 ship apps/email-mcp/package.json "$HETZNER_HOST:$REMOTE_PATH/apps/email-mcp/" || exit 1
 
 # GitHub MCP — thin node wrapper around the official github/github-mcp-server
