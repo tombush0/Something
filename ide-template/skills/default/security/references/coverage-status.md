@@ -5,7 +5,7 @@
 | Path | Source format |
 |---|---|
 | `email-mcp` `read_message` body, `list_recent` / `search` snippets | `email:<message-id>` |
-| Google Docs, Drive (incl. comments), Sheets, Slides, Calendar, Tasks, Chat — every result | `google-docs`, `google-drive`, …, `google-chat` |
+| Google Docs, Drive (incl. comments), Sheets, Slides, Calendar, Tasks, Chat, Gmail — every result | `google-docs`, `google-drive`, …, `google-chat`, `gmail` |
 | Trello, X, Shopify, SignWell — every result | `trello`, `x`, `shopify`, `signwell` |
 | Every remote MCP server (notetakers, Notion, Stripe, Firecrawl, Parallel, …) — every text block, through the bridge | the integration id |
 | `recent_messages` (the transcript of recent chat / Telegram / a group) | `recent-<channel>` |
