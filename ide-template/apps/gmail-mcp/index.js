@@ -247,7 +247,8 @@ async function uploadRaw(url, metadata, raw) {
   ]);
   return api.post(url, body, {
     query: { uploadType: 'multipart' },
-    headers: { 'Content-Type': `multipart/related; boundary=${b}`, 'Content-Length': String(body.length) },
+    // No Content-Length: Node's fetch sets it from the body and refuses one set by hand (UND_ERR_INVALID_ARG).
+    headers: { 'Content-Type': `multipart/related; boundary=${b}` },
   });
 }
 
