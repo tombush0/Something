@@ -194,6 +194,9 @@ export function list() {
     // Their Slack user id in the connected workspace — matched by email the
     // first time they write, never typed in by hand.
     slackUserId:      normalizeSlackUserId(e.slackUserId),
+    // Their Google Chat user (users/<id>) — matched by the email Chat sends
+    // with their first message to the app, never typed in by hand.
+    gchatUserId:      normalizeGchatUserId(e.gchatUserId),
     surfaces:         normalizeSurfaces(e.preferredSurface),
     preferredSurface: legacySurface(e.preferredSurface),
     // Shared so a teammate's bot can relay to this person in their language.
@@ -845,6 +848,46 @@ export function setSlack(email, { userId } = {}, actor) {
   return find(e);
 }
 
+// ─── Google Chat identity ────────────────────────────────────────────────────
+// The same as Slack's: a Chat user (users/<numeric id>) is matched to a roster
+// entry by the email Chat sends with the person's first message to the app,
+// and from then on the id is the key. Removing someone from the roster cuts
+// their Chat the same moment.
+function normalizeGchatUserId(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return /^users\/\d{5,30}$/.test(s) ? s : null;
+}
+
+/** Which member is this Google Chat user (inbound routing), or null. */
+export function userByGchatId(userId) {
+  const id = normalizeGchatUserId(userId);
+  if (!id) return null;
+  return list().find(m => m.gchatUserId === id) || null;
+}
+
+/**
+ * Link (or, with '' / null, unlink) a Google Chat user to a roster entry. One
+ * id belongs to one person. Returns the updated member.
+ */
+export function setGchat(email, { userId } = {}, actor) {
+  const e = normalize(email);
+  const entries = readRaw();
+  const idx = entries.findIndex(x => normalize(x.email) === e);
+  if (idx === -1) throw new Error(`${e} is not on the team.`);
+  const cleared = userId === '' || userId === null || userId === undefined;
+  const id = cleared ? null : normalizeGchatUserId(userId);
+  if (!cleared && !id) throw new Error('That is not a Google Chat user id.');
+  if (id && entries.some((x, i) => i !== idx && normalizeGchatUserId(x.gchatUserId) === id)) {
+    throw new Error('That Google Chat account is already linked to another teammate.');
+  }
+  entries[idx] = { ...entries[idx], gchatUserId: id };
+  writeRaw(entries);
+  appendAudit('gchat_update', e, { actor: normalize(actor) || null, linked: !!id });
+  writeTeamRoster();
+  return find(e);
+}
+
 // ─── Team config: solo vs collaborative ──────────────────────────────────────
 // A solo workspace shouldn't carry team UI (the Workspace/Personal split, role
 // badges, invite flow) — that's overkill for one person. `teamMode` gates all
@@ -937,7 +980,7 @@ export function getGroup(chatId) {
  */
 export function memberGroupsOf(slug) {
   const u = list().find(x => x.slug === slug);
-  const ids = [u?.telegramChatId, u?.slackUserId].filter(Boolean);
+  const ids = [u?.telegramChatId, u?.slackUserId, u?.gchatUserId].filter(Boolean);
   if (!ids.length) return [];
   return listGroups().filter(g => g.members && ids.some(id => Object.prototype.hasOwnProperty.call(g.members, id))).map(g => g.chatId);
 }
@@ -1149,11 +1192,11 @@ export function writeTeamRoster() {
     }
     const contactHint = (m) => {
       // Bot-facing routing guideline — surface only, never the raw chat id.
-      const on = [m.telegramChatId ? 'Telegram linked' : 'no Telegram', ...(m.slackUserId ? ['Slack linked'] : [])];
+      const on = [m.telegramChatId ? 'Telegram linked' : 'no Telegram', ...(m.slackUserId ? ['Slack linked'] : []), ...(m.gchatUserId ? ['Google Chat linked'] : [])];
       const linked = on.join(', ');
       const pref = m.surfaces
         ? `prefers ${describeSurfaces(m.surfaces)}`
-        : (m.telegramChatId || m.slackUserId ? 'prefers either' : 'web only');
+        : (m.telegramChatId || m.slackUserId || m.gchatUserId ? 'prefers either' : 'web only');
       return `${pref} (${linked})`;
     };
     const langHint = (m) => (m.preferredLanguage ? `writes in ${m.preferredLanguage}` : 'unknown');

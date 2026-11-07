@@ -21,6 +21,15 @@ const senders = {
     const ts = await api.postMessage({ channel, text });
     return { ok: ts.length > 0, messageId: ts[ts.length - 1] || null, channel };
   },
+  // Google Chat: into the person's DM with the coworker's Chat app. The app
+  // cannot open a DM on its own, so it is the one they wrote in.
+  gchat: async (member, text) => {
+    const dm = await import('./gchat-dm.js');
+    const space = await dm.dmSpaceOf(member);
+    if (!space) return { ok: false, error: 'no Google Chat DM yet (they have not written to the app)' };
+    const r = await dm.postReply({ space, text });
+    return { ok: r.ok, messageId: r.messageId, channel: space };
+  },
 };
 export function __setSenders(over) { Object.assign(senders, over); }
 
@@ -31,6 +40,7 @@ export function linkedSurfaces(member) {
   const out = [];
   if (member?.telegramChatId && usable('telegram')) out.push('telegram');
   if (member?.slackUserId && usable('slack')) out.push('slack');
+  if (member?.gchatUserId && usable('google-chat-app')) out.push('gchat');
   return out;
 }
 
@@ -43,7 +53,7 @@ export function linkedSurfaces(member) {
 export function surfacesFor(member, channel = 'all') {
   const linked = linkedSurfaces(member);
   if (channel === 'web') return [];
-  if (channel === 'telegram' || channel === 'slack') return linked.includes(channel) ? [channel] : [];
+  if (channel === 'telegram' || channel === 'slack' || channel === 'gchat') return linked.includes(channel) ? [channel] : [];
   return linked.filter(s => prefers(member, s));
 }
 
@@ -61,7 +71,7 @@ export async function sendToPerson(member, text, surface) {
  * { telegram: bool, slack: bool, tgMessageId, slackChannel }.
  */
 export async function deliver(member, text, channel = 'all') {
-  const out = { telegram: false, slack: false, tgMessageId: null, slackChannel: null, sent: [] };
+  const out = { telegram: false, slack: false, gchat: false, tgMessageId: null, slackChannel: null, gchatSpace: null, sent: [] };
   for (const s of surfacesFor(member, channel)) {
     const r = await sendToPerson(member, text, s);
     if (!r.ok) { process.stderr.write(`[deliver] ${member.slug}: ${s} leg failed: ${r.error}\n`); continue; }
@@ -69,6 +79,7 @@ export async function deliver(member, text, channel = 'all') {
     out.sent.push(s);
     if (s === 'telegram') out.tgMessageId = r.messageId != null ? String(r.messageId) : null;
     if (s === 'slack') out.slackChannel = r.channel || null;
+    if (s === 'gchat') out.gchatSpace = r.channel || null;
   }
   return out;
 }

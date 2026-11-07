@@ -84,7 +84,7 @@ export default function teamRouter() {
       // is visible to EVERYONE, so members can see each other's channels.
       // The raw chat id is a private contact handle, so only an admin or the
       // row's owner sees the actual value. `preferredSurface` stays visible too.
-      const row = { ...e, avatarUrl: avatarUrl(e.slug), telegramLinked: !!e.telegramChatId, slackLinked: !!e.slackUserId, operatorPinned: !!(opId && e.telegramChatId === opId) };
+      const row = { ...e, avatarUrl: avatarUrl(e.slug), telegramLinked: !!e.telegramChatId, slackLinked: !!e.slackUserId, gchatLinked: !!e.gchatUserId, operatorPinned: !!(opId && e.telegramChatId === opId) };
       if (!viewerIsAdmin && e.email !== viewerEmail) row.telegramChatId = null;
       return row;
     });
@@ -194,7 +194,7 @@ export default function teamRouter() {
   });
 
   router.patch('/team/:email', requireAdmin, rateLimit, express.json({ limit: '4kb' }), (req, res) => {
-    const { role, telegramChatId, preferredSurface, preferredLanguage, slackUserId } = req.body || {};
+    const { role, telegramChatId, preferredSurface, preferredLanguage, slackUserId, gchatUserId } = req.body || {};
     try {
       let entry = null;
       if (role !== undefined) {
@@ -212,9 +212,13 @@ export default function teamRouter() {
       if (slackUserId !== undefined) {
         entry = team.setSlack(req.params.email, { userId: slackUserId }, req.actor);
       }
+      // Google Chat, the same way: an admin may link an account by its users/<id>.
+      if (gchatUserId !== undefined) {
+        entry = team.setGchat(req.params.email, { userId: gchatUserId }, req.actor);
+      }
       // Reflect v2: pre-consent to auto-promote this person's org DM facts to
       // shared memory (typically the operator toggles it on themselves).
-      if (!entry) return res.status(400).json({ error: 'Nothing to update (role, telegramChatId, slackUserId, preferredSurface, or preferredLanguage).' });
+      if (!entry) return res.status(400).json({ error: 'Nothing to update (role, telegramChatId, slackUserId, gchatUserId, preferredSurface, or preferredLanguage).' });
       res.json({ ok: true, entry });
     } catch (err) {
       res.status(400).json({ error: err.message });

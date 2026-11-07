@@ -68,6 +68,8 @@ function meEnvelope(req) {
     // Cross-surface contact (own). Lets the UI show the "link your Telegram"
     // prompt when Telegram is active but this user hasn't linked a chat id.
     telegramChatId:   member?.telegramChatId || null,
+    // Their Google Chat account, once it linked itself by email (Settings → Reach me).
+    gchatUserId:      member?.gchatUserId || null,
     preferredSurface: member?.preferredSurface || null,
     surfaces:         member?.surfaces || null,
     preferredLanguage: member?.preferredLanguage || null,

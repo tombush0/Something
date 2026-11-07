@@ -38,6 +38,7 @@ export default function SettingsView({ sidebarOpen }) {
   const integ = useApi('/api/integrations');
   const tgActive = !!(integ.data?.integrations || []).find(i => i.id === 'telegram')?.active;
   const slActive = !!(integ.data?.integrations || []).find(i => i.id === 'slack')?.active;
+  const gcActive = !!(integ.data?.integrations || []).find(i => i.id === 'google-chat-app')?.active;
   const [error, setError] = useState(null);
 
   // One PATCH per change; the fresh envelope goes to every mounted view.
@@ -67,7 +68,7 @@ export default function SettingsView({ sidebarOpen }) {
             <>
               <Group title="Profile"><ProfileRows me={me} patch={patch} onError={setError} /></Group>
               <Group title="Assistant"><AssistantRows me={me} patch={patch} /></Group>
-              <Group title="Reach me"><ReachRows me={me} patch={patch} tgActive={tgActive} slActive={slActive} /></Group>
+              <Group title="Reach me"><ReachRows me={me} patch={patch} tgActive={tgActive} slActive={slActive} gcActive={gcActive} /></Group>
               {me.role === 'admin' && <Group title="Workspace"><WorkspaceRows me={me} onError={setError} /></Group>}
               <SharedLinks isAdmin={me.role === 'admin'} onError={setError} />
             </>
@@ -250,12 +251,12 @@ function AssistantRows({ me, patch }) {
 // (signing in is the link); Telegram is linked by a chat id the person pastes
 // (Telegram gives no email to match on); Slack links itself the first time
 // the person writes to the assistant there, by the email on their Slack
-// account. The preference is saved as the `surfaces` set; `preferredSurface`
+// account, and Google Chat the same way. The preference is saved as the `surfaces` set; `preferredSurface`
 // (web / telegram / both) is what older clients still read.
-function ReachRows({ me, patch, tgActive, slActive }) {
+function ReachRows({ me, patch, tgActive, slActive, gcActive }) {
   const chosen = new Set(Array.isArray(me.surfaces) && me.surfaces.length ? me.surfaces
-    : me.preferredSurface === 'both' ? ['web', 'telegram'] : me.preferredSurface ? [me.preferredSurface] : ['web', ...(tgActive ? ['telegram'] : []), ...(slActive ? ['slack'] : [])]);
-  const all = ['web', ...(tgActive ? ['telegram'] : []), ...(slActive ? ['slack'] : [])];
+    : me.preferredSurface === 'both' ? ['web', 'telegram'] : me.preferredSurface ? [me.preferredSurface] : ['web', ...(tgActive ? ['telegram'] : []), ...(slActive ? ['slack'] : []), ...(gcActive ? ['gchat'] : [])]);
+  const all = ['web', ...(tgActive ? ['telegram'] : []), ...(slActive ? ['slack'] : []), ...(gcActive ? ['gchat'] : [])];
   const toggle = (v) => {
     const next = new Set(chosen);
     if (next.has(v)) { if (next.size === 1) return; next.delete(v); } else next.add(v);
@@ -280,6 +281,11 @@ function ReachRows({ me, patch, tgActive, slActive }) {
       {slActive && (
         <SurfaceRow label="Slack" hint={me.slackUserId ? 'Linked by the email on your Slack account.' : 'Not seen yet. Write to the assistant on Slack once; it links you by the email on your Slack account.'} on={chosen.has('slack')} onToggle={() => toggle('slack')}>
           <span className={cn('text-[12px]', me.slackUserId ? 'font-mono text-muted-foreground/85' : 'text-muted-foreground/55')}>{me.slackUserId || 'Not linked'}</span>
+        </SurfaceRow>
+      )}
+      {gcActive && (
+        <SurfaceRow label="Google Chat" hint={me.gchatUserId ? 'Linked by the email on your Google account.' : 'Not seen yet. Write to the assistant on Google Chat once; it links you by the email on your Google account.'} on={chosen.has('gchat')} onToggle={() => toggle('gchat')}>
+          <span className={cn('text-[12px]', me.gchatUserId ? 'text-muted-foreground/85' : 'text-muted-foreground/55')}>{me.gchatUserId ? 'Linked' : 'Not linked'}</span>
         </SurfaceRow>
       )}
     </>

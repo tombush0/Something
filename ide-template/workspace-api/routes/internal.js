@@ -95,7 +95,7 @@ async function deliverRunOutcome(member, deliver, reply, sentItself) {
     return;
   }
   recordOutcome({ id: deliver.id, slug: member.slug, outcome: 'said' });
-  const channel = ['telegram', 'slack', 'web', 'all'].includes(deliver.channel) ? deliver.channel : 'all';
+  const channel = ['telegram', 'slack', 'gchat', 'web', 'all'].includes(deliver.channel) ? deliver.channel : 'all';
   const botName = resolveBranding().botName;
   const title = String(deliver.title || botName).trim().slice(0, 120) || botName;
 
@@ -107,7 +107,7 @@ async function deliverRunOutcome(member, deliver, reply, sentItself) {
   const tgSent = legs.telegram;
   // A surface was named and reached: no web toast on top; otherwise the web
   // is where it is sure to be seen.
-  const webToast = !((channel === 'telegram' || channel === 'slack') && legs[channel]);
+  const webToast = !((channel === 'telegram' || channel === 'slack' || channel === 'gchat') && legs[channel]);
 
   // What reached Telegram is also in their "Telegram" chat, where it was said.
   if (tgSent && wsapiTransport()) recordOnSurface(member.slug, 'telegram', { role: 'assistant', text, kind: 'bot', delivery: { channel: 'telegram', tgChatId: String(member.telegramChatId), at: new Date().toISOString() } });
@@ -119,6 +119,7 @@ async function deliverRunOutcome(member, deliver, reply, sentItself) {
       tgChatId: tgSent ? String(member.telegramChatId) : null,
       tgMessageId: legs.tgMessageId,
       slackChannel: legs.slackChannel,
+      gchatSpace: legs.gchatSpace,
       relayDepth: 0,
       framedToBrain: false,
       at: new Date().toISOString(),
@@ -308,11 +309,11 @@ export default function internalRouter() {
   router.post('/internal/reminder-deliver', loopbackOnly, botOnly, async (req, res) => {
     const { recipients, channel, title, body } = req.body || {};
     try {
-      const ch = ['telegram', 'slack', 'web', 'all'].includes(channel) ? channel : 'all';
+      const ch = ['telegram', 'slack', 'gchat', 'web', 'all'].includes(channel) ? channel : 'all';
       // The operator is served by the brain (a frame in the tmux session) —
-      // except on Slack, which the brain cannot reach: there the operator is a
-      // recipient like anyone, in solo mode too.
-      const opViaHere = ch === 'slack';
+      // except on Slack and Google Chat, which the brain cannot reach: there
+      // the operator is a recipient like anyone, in solo mode too.
+      const opViaHere = ch === 'slack' || ch === 'gchat';
       if (!getTeamMode() && !opViaHere) return res.json({ ok: true, skipped: 'solo' });
       const opSlug = primaryAdminSlug();
       let slugs = Array.isArray(recipients) ? recipients.slice() : [];
@@ -331,7 +332,7 @@ export default function internalRouter() {
           catch (e) { process.stderr.write(`[reminder-deliver] web leg ${slug}: ${e.message}\n`); }
         }
         const legs = await deliverTo(m, `⏰ ${t}${b ? ': ' + b : ''}`.trim(), ch);
-        delivered.push({ slug, web, telegram: legs.telegram, slack: legs.slack });
+        delivered.push({ slug, web, telegram: legs.telegram, slack: legs.slack, gchat: legs.gchat });
       }
       return res.json({ ok: true, delivered, count: delivered.length });
     } catch (err) {
@@ -547,16 +548,20 @@ export default function internalRouter() {
       const deliverTo   = target || resolveMember(actor);
       const explicitTg  = channel === 'telegram';
       const explicitSlack = channel === 'slack';
+      const explicitGchat = channel === 'gchat';
       const explicitWeb = channel === 'web';
       const prefersTg = !!(deliverTo?.telegramChatId && prefers(deliverTo, 'telegram'));
       // Slack, the same way: named by the sender, or the recipient's own preference on a relay.
-      const wantSlack = !!(deliverTo?.slackUserId && !explicitWeb && !explicitTg &&
+      const wantSlack = !!(deliverTo?.slackUserId && !explicitWeb && !explicitTg && !explicitGchat &&
         (explicitSlack || (isRelay && prefers(deliverTo, 'slack'))));
+      // Google Chat, the same way again.
+      const wantGchat = !!(deliverTo?.gchatUserId && !explicitWeb && !explicitTg && !explicitSlack &&
+        (explicitGchat || (isRelay && prefers(deliverTo, 'gchat'))));
       // Send to Telegram when the sender EXPLICITLY asked for it (works for a
       // relay AND a self "send me on Telegram"), or — for a cross-user relay —
       // when the recipient's preference is Telegram. Proactive/reminders (not
       // explicit, not a relay) don't auto-forward here; they have their own path.
-      const wantTg = !!(deliverTo?.telegramChatId && !explicitWeb && !explicitSlack &&
+      const wantTg = !!(deliverTo?.telegramChatId && !explicitWeb && !explicitSlack && !explicitGchat &&
         (explicitTg || (isRelay && prefersTg)));
       // A relay whose recipient is the OPERATOR — the primary admin, whose brain
       // IS the persistent tmux claude. Deliver it via a reminder-style FRAME
@@ -624,11 +629,21 @@ export default function internalRouter() {
         if (!r.ok) process.stderr.write(`[internal] relay slack leg to ${deliverTo.slug}: ${r.error}\n`);
       }
 
+      // Google Chat: a raw send into the recipient's DM with the Chat app.
+      let gchatSent = false;
+      let gchatSpace = null;
+      if (wantGchat) {
+        const r = await sendToPerson(deliverTo, text, 'gchat');
+        gchatSent = r.ok;
+        gchatSpace = r.channel || null;
+        if (!r.ok) process.stderr.write(`[internal] relay gchat leg to ${deliverTo.slug}: ${r.error}\n`);
+      }
+
       // Web toast: suppress when the sender explicitly chose Telegram or Slack
       // and it landed there, OR when the frame was injected (the brain's
       // Telegram emit is mirrored to the operator's web by web-mirror.sh, so a
       // toast here would double the web notification too).
-      const webToast = framedToBrain ? false : !((explicitTg && tgSent) || (explicitSlack && slackSent));
+      const webToast = framedToBrain ? false : !((explicitTg && tgSent) || (explicitSlack && slackSent) || (explicitGchat && gchatSent));
 
       // Record the relay/bot message into the web thread WITH delivery truth, so
       // a teammate's Telegram reply can thread back deterministically (their
@@ -642,10 +657,11 @@ export default function internalRouter() {
         appendToSession(actor, destId, {
           role: 'assistant', text, kind: 'bot',
           delivery: {
-            channel: tgSent ? (webToast ? 'both' : 'telegram') : slackSent ? (webToast ? 'both' : 'slack') : 'web',
+            channel: tgSent ? (webToast ? 'both' : 'telegram') : slackSent ? (webToast ? 'both' : 'slack') : gchatSent ? (webToast ? 'both' : 'gchat') : 'web',
             tgChatId: wantTg && deliverTo?.telegramChatId ? String(deliverTo.telegramChatId) : null,
             tgMessageId,
             slackChannel,
+            gchatSpace,
             relayDepth: depth,
             framedToBrain,
             at: new Date().toISOString(),
@@ -674,6 +690,9 @@ export default function internalRouter() {
           slack: slackSent,
           slackRequested: explicitSlack,
           recipientLinkedSlack: !!deliverTo?.slackUserId,
+          gchat: gchatSent,
+          gchatRequested: explicitGchat,
+          recipientLinkedGchat: !!deliverTo?.gchatUserId,
         },
       });
     } catch (err) {

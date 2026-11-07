@@ -216,18 +216,18 @@ fire_operator() {
         FIRE_PATH="undelivered-no-brain"
         return 1
     fi
-    # Slack is not a surface the tmux brain has (no Slack tool there). A
-    # Slack-bound reminder runs as a headless turn, which delivers its result
-    # through web_send_message with channel=slack — the operator is a person
-    # like any other on that surface. No tmux frame, no raw text.
-    if [ "$channel" = "slack" ]; then
+    # Slack and Google Chat are not surfaces the tmux brain has (no tool for
+    # them there). A reminder bound for one runs as a headless turn, which
+    # delivers its result through web_send_message with that channel — the
+    # operator is a person like any other there. No tmux frame, no raw text.
+    if [ "$channel" = "slack" ] || [ "$channel" = "gchat" ]; then
         [ -z "$OP_SLUG" ] && fetch_op_slug
-        if invoke_turn_operator "[${frame} channel=slack | ${message}]"; then
-            log "Slack-bound reminder ran as a headless turn (urgency=${urgency})"
+        if invoke_turn_operator "[${frame} channel=${channel} | ${message}]"; then
+            log "${channel}-bound reminder ran as a headless turn (urgency=${urgency})"
             FIRE_PATH="invoke-turn"
             return 0
         fi
-        log "Slack-bound reminder: no headless turn available — staying silent rather than sending machine text: ${message:0:60}"
+        log "${channel}-bound reminder: no headless turn available — staying silent rather than sending machine text: ${message:0:60}"
         FIRE_PATH="undelivered-no-brain"
         return 1
     fi
@@ -363,7 +363,7 @@ if (r.skipped) process.exit(0);
 const rows = Array.isArray(r.delivered) ? r.delivered : [];
 // Slack counts: a Slack-only delivery once read as "reached nobody", so the
 // reminder was sent again, escalated to the operator and finally parked.
-const dead = rows.filter(d => !d.web && !d.telegram && !d.slack).map(d => d.slug);
+const dead = rows.filter(d => !d.web && !d.telegram && !d.slack && !d.gchat).map(d => d.slug);
 if (!rows.length) { process.stderr.write('no recipient resolved'); process.exit(3); }
 if (dead.length)  { process.stderr.write('reached nobody: ' + dead.join(',')); process.exit(3); }
 NODE
@@ -667,7 +667,7 @@ reminders = reminders.map(r => {
     // pre-date the field.
     // 'slack' too: fire_operator runs a Slack-bound one headlessly. Left out of
     // this list, a Slack reminder silently became 'all' and never reached Slack.
-    const channel = (typeof r.channel === 'string' && ['telegram','web','slack','all'].includes(r.channel))
+    const channel = (typeof r.channel === 'string' && ['telegram','web','slack','gchat','all'].includes(r.channel))
         ? r.channel : 'all';
     // Team mode: recipients ride as the 2nd column (CSV of slugs, or the
     // '*everyone*' sentinel). EMPTY = solo / operator-only → the bash side

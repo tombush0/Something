@@ -72,6 +72,7 @@ import * as telegramListener from './lib/integrations/telegram-listener.js';
 import { resumeInterrupted, routeGroupMessage } from './lib/integrations/group-watcher.js';
 import * as slackChannels from './lib/integrations/slack-channels.js';
 import * as gchatListener from './lib/integrations/gchat-listener.js';
+import { createDmHandler as createGchatDmHandler } from './lib/integrations/gchat-dm.js';
 import { startBroker } from './lib/integrations/broker.js';
 import { decryptFor, ensureOwners as ensureIntegrationOwners } from './lib/integrations/store.js';
 import { get as getCatalog } from './lib/integrations/catalog.js';
@@ -216,6 +217,7 @@ if (cryptoReady()) {
   catch (err) { process.stderr.write(`[workspace-api] slack listener failed to start: ${err.message}\n`); }
   // Google Chat (the coworker's own Chat app) is pulled from here whenever it is
   // connected and not paused; nothing to do when it is not.
+  gchatListener.setHandlers({ onDm: createGchatDmHandler() });
   try { if (gchatListener.reconcile()) process.stdout.write('[workspace-api] google chat: pulling\n'); }
   catch (err) { process.stderr.write(`[workspace-api] google chat listener failed to start: ${err.message}\n`); }
   // Telegram read from here when TELEGRAM_TRANSPORT=wsapi: every DM a turn as

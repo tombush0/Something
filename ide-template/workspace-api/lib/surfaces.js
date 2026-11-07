@@ -9,7 +9,7 @@
  * old shape breaks; the set is the truth.
  */
 
-export const SURFACES = ['web', 'telegram', 'slack'];
+export const SURFACES = ['web', 'telegram', 'slack', 'gchat'];
 const KNOWN = new Set(SURFACES);
 
 /**
@@ -43,13 +43,14 @@ export function parseSurfaces(v) {
 
 /**
  * Does this person want to be reached on `surface`? With no preference stated,
- * Slack counts for someone linked there (the caller checks the link): a team
- * on Slack lives there, and "send it to him directly" once landed only in his
- * workspace, where he did not look. Telegram stays opt-in.
+ * Slack and Google Chat count for someone linked there (the caller checks the
+ * link): a team on a workplace messenger lives there, and "send it to him
+ * directly" once landed only in his workspace, where he did not look.
+ * Telegram stays opt-in.
  */
 export function prefers(member, surface) {
   const set = normalizeSurfaces(member?.surfaces ?? member?.preferredSurface);
-  if (!set) return surface === 'slack';
+  if (!set) return surface === 'slack' || surface === 'gchat';
   return set.includes(surface);
 }
 
@@ -72,6 +73,6 @@ export function legacySurface(v) {
 export function describeSurfaces(v) {
   const set = normalizeSurfaces(v);
   if (!set) return null;
-  const label = { web: 'web', telegram: 'Telegram', slack: 'Slack' };
+  const label = { web: 'web', telegram: 'Telegram', slack: 'Slack', gchat: 'Google Chat' };
   return set.map(s => label[s]).join(' and ');
 }

@@ -225,7 +225,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // memory files with Read or Bash is a recital too (seen in a replay — every
 // such answer came back marked as a finding).
 const READING_TOOLS = /^(WebSearch|WebFetch)$|(^|__)(tab_snapshot|tab_screenshot|use_integrations)$/;
-const NOT_A_FINDING = new Set(['openai', 'gemini-chat', 'grok', 'nano-banana', 'seedream', 'deepl', 'telegram', 'slack']);
+const NOT_A_FINDING = new Set(['openai', 'gemini-chat', 'grok', 'nano-banana', 'seedream', 'deepl', 'telegram', 'slack', 'google-chat-app']);
 const READING_MCPS = (() => {
   const names = new Set(['playwright', 'google-workspace', 'email']);
   try {
@@ -285,7 +285,7 @@ const SOURCE_OF = { web: 'web', dm: 'telegram', group: 'group' };
 export function sourceOf(src, messages = []) {
   if (src.kind !== 'web') return SOURCE_OF[src.kind];
   const kinds = new Set(messages.filter(m => m.human).map(m => m.kind || 'web'));
-  if (kinds.size === 1) { const k = [...kinds][0]; if (k === 'telegram' || k === 'slack') return k; }
+  if (kinds.size === 1) { const k = [...kinds][0]; if (k === 'telegram' || k === 'slack' || k === 'gchat') return k; }
   return 'web';
 }
 

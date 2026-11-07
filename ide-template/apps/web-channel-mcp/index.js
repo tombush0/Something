@@ -89,10 +89,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           channel: {
             type: 'string',
-            enum: ['telegram', 'slack', 'web'],
+            enum: ['telegram', 'slack', 'gchat', 'web'],
             description:
               "Optional explicit delivery channel: set this ONLY when the user " +
-              "names one ('on Telegram' → 'telegram'; 'on Slack' → 'slack'; 'in " +
+              "names one ('on Telegram' → 'telegram'; 'on Slack' → 'slack'; " +
+              "'on Google Chat' / 'on Chat' → 'gchat'; 'in " +
               "their workspace' / 'on web' → 'web'). It OVERRIDES the recipient's " +
               "default preference. Omit it normally: the recipient is then reached " +
               "on whichever surfaces THEY prefer. A named surface delivers only " +
@@ -139,7 +140,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const recipientName = typeof args?.recipient_name === 'string' ? args.recipient_name.trim() : '';
     // Explicit delivery channel override ('telegram' | 'web'); '' = recipient's
     // own preference decides.
-    const channel = (args?.channel === 'telegram' || args?.channel === 'slack' || args?.channel === 'web') ? args.channel : '';
+    const channel = ['telegram', 'slack', 'gchat', 'web'].includes(args?.channel) ? args.channel : '';
     const from = (process.env.IDE_ACTOR_SLUG || '').trim();
     // B3 v2 relay threading: the sender's current web session id, so wsapi can
     // pair it with the recipient's relay thread and keep replies in-thread.
@@ -210,10 +211,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const who = recipient ? 'their' : 'your';
       // Slack is reported like Telegram: the bot once said "workspace" for a
       // message that had also reached the person's Slack, and could not tell.
-      const also = d.slack ? ` AND ${who} Slack` : '';
+      const also = `${d.slack ? ` AND ${who} Slack` : ''}${d.gchat ? ` AND ${who} Google Chat` : ''}`;
       let where;
-      if ((d.telegram || d.slack) && d.webToast === false) {
-        where = `Delivered to ${who} ${[d.telegram ? 'Telegram' : null, d.slack ? 'Slack' : null].filter(Boolean).join(' and ')}.`;
+      if ((d.telegram || d.slack || d.gchat) && d.webToast === false) {
+        where = `Delivered to ${who} ${[d.telegram ? 'Telegram' : null, d.slack ? 'Slack' : null, d.gchat ? 'Google Chat' : null].filter(Boolean).join(' and ')}.`;
       } else if (d.telegram) {
         where = `Delivered to ${who} workspace AND ${who} Telegram${also}.`;
       } else if (d.telegramRequested && d.recipientLinkedTelegram === false) {
@@ -224,6 +225,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         where = `Delivered to ${who} workspace. Slack was requested but ${recipient ? 'they are' : 'you are'} NOT linked to Slack, so it did NOT reach Slack; say so plainly.`;
       } else if (d.slackRequested && !d.slack) {
         where = `Delivered to ${who} workspace. Slack was requested but the Slack send did not go through; say it's in the workspace, not on Slack.`;
+      } else if (d.gchatRequested && d.recipientLinkedGchat === false) {
+        where = `Delivered to ${who} workspace. Google Chat was requested but ${recipient ? 'they are' : 'you are'} NOT linked to Google Chat (they link by writing to the app once), so it did NOT reach Google Chat; say so plainly.`;
+      } else if (d.gchatRequested && !d.gchat) {
+        where = `Delivered to ${who} workspace. Google Chat was requested but the Google Chat send did not go through; say it's in the workspace, not on Google Chat.`;
       } else {
         where = `Delivered to ${who} workspace${also}.`;
       }

@@ -314,12 +314,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           channel: {
             type: 'string',
-            enum: ['telegram', 'slack', 'web', 'all'],
+            enum: ['telegram', 'slack', 'gchat', 'web', 'all'],
             description:
               'Which surface the user wants this reminder delivered on. ' +
               '"telegram": bot replies via Telegram only (mirror covers web ' +
               'if the user has it open). "slack": the result goes to their ' +
-              'Slack DM with the bot (the system delivers it). "web": bot ' +
+              'Slack DM with the bot (the system delivers it). "gchat": the ' +
+              'same, into their Google Chat DM with the app. "web": bot ' +
               'replies via web_send_message; nothing goes to Telegram. "all": ' +
               'bot picks whichever channels are wired and replies through them. ' +
               'Default: read from REMINDER_DEFAULT_CHANNEL env var (set at ' +
@@ -580,7 +581,7 @@ async function prepareReminder(args) {
       // it, and the group registry is what actually authorises the chat at fire
       // time (an id here is a request, not a permission).
       ...(roomTarget(args.chat) ? { chat: roomTarget(args.chat) } : {}),
-      channel: (typeof args.channel === 'string' && ['telegram', 'slack', 'web', 'all'].includes(args.channel))
+      channel: (typeof args.channel === 'string' && ['telegram', 'slack', 'gchat', 'web', 'all'].includes(args.channel))
         ? args.channel
         : (process.env.REMINDER_DEFAULT_CHANNEL || 'all'),
       // Delivery urgency: 'ambient' items are held + woven into conversation

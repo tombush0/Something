@@ -229,13 +229,16 @@ function reachLine(slug, m) {
   try {
     const telegramOn = integrationsStore.isUsable('telegram');
     const slackOn = integrationsStore.isUsable('slack');
+    const gchatOn = integrationsStore.isUsable('google-chat-app');
     const linkedTg = telegramOn && (!!m?.telegramChatId || slug === primaryAdminSlug());
     const linkedSlack = slackOn && !!m?.slackUserId;
-    const on = ['the web workspace', ...(linkedTg ? ['Telegram'] : []), ...(linkedSlack ? ['Slack'] : [])];
-    const prefs = ['web', 'telegram', 'slack'].filter(s => prefers(m, s) && (s === 'web' || (s === 'telegram' ? linkedTg : linkedSlack)));
-    const names = { web: 'the web workspace', telegram: 'Telegram', slack: 'Slack' };
+    const linkedGchat = gchatOn && !!m?.gchatUserId;
+    const on = ['the web workspace', ...(linkedTg ? ['Telegram'] : []), ...(linkedSlack ? ['Slack'] : []), ...(linkedGchat ? ['Google Chat'] : [])];
+    const linked = { web: true, telegram: linkedTg, slack: linkedSlack, gchat: linkedGchat };
+    const prefs = ['web', 'telegram', 'slack', 'gchat'].filter(s => prefers(m, s) && linked[s]);
+    const names = { web: 'the web workspace', telegram: 'Telegram', slack: 'Slack', gchat: 'Google Chat' };
     const preference = prefs.length && prefs.length < on.length ? ` They prefer ${prefs.map(p => names[p]).join(' and ')}.` : '';
-    const missing = [...(telegramOn && !linkedTg ? ['Telegram'] : []), ...(slackOn && !linkedSlack ? ['Slack'] : [])];
+    const missing = [...(telegramOn && !linkedTg ? ['Telegram'] : []), ...(slackOn && !linkedSlack ? ['Slack'] : []), ...(gchatOn && !linkedGchat ? ['Google Chat'] : [])];
     const list = on.length > 2 ? `${on.slice(0, -1).join(', ')} and ${on[on.length - 1]}` : on.join(' and ');
     return on.length > 1
       ? `Reaches them on: ${list}.${preference}${missing.length ? ` They have not linked ${missing.join(' or ')} — never set a reminder or a message for them there.` : ''}`

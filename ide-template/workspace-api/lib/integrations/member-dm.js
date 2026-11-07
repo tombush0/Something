@@ -61,7 +61,17 @@ const SURFACES = {
       'that tool is for OTHER teammates only. If there is nothing to say, reply [[SILENT]].' +
       ' To hand them a file — one you wrote for them, or one they asked for — put `[[SEND_FILE <workspace-relative path>]]` on its own line; the system attaches it and strips the marker. When you write a file for them, attach it in the same reply and still say where it lives: they cannot open the workspace from here.',
   },
+  gchat: {
+    title: 'Google Chat',
+    note: '[SURFACE] This message came in over Google Chat, as a direct message from the person you are talking to. ' +
+      'Your final reply is delivered to them in that Google Chat conversation by the system — write it as a Chat message: ' +
+      'short; Google Chat formatting only (*bold*, _italic_, `code`, ```code blocks```, plain links), no headings, no tables, no HTML. ' +
+      'Do not call web_send_message to reach THIS person; that tool is for OTHER teammates only. If there is nothing to say, reply [[SILENT]].' +
+      ' To hand them a file — one you wrote for them, or one they asked for — put `[[SEND_FILE <workspace-relative path>]]` on its own line; the system strips the marker and says where the file lives when it cannot be attached here. Always also say where it lives: they cannot open the workspace from here.',
+  },
 };
+// Where a reply on each surface went, as the web record keeps it.
+const DELIVERY_FIELD = { telegram: 'tgChatId', slack: 'slackChannel', gchat: 'gchatSpace' };
 
 // A file the reply hands over: the marker is stripped, the file goes first.
 const FILE_RE = /`{0,3}\[\[\s*SEND_FILE(?:_DM)?\s+([^\]\n]+?)\s*\]\]`{0,3}/gi;
@@ -172,7 +182,7 @@ export async function answerMemberDm(member, body, deps = {}) {
     role: 'assistant', text, attachments, kind: 'bot',
     delivery: {
       channel: ok ? surface : 'web',
-      ...(surface === 'telegram' ? { tgChatId: ok ? String(target) : null } : { slackChannel: ok ? String(target) : null }),
+      [DELIVERY_FIELD[surface]]: ok ? String(target) : null,
       at: new Date().toISOString(),
     },
   });
