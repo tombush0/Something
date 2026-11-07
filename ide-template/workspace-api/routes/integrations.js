@@ -35,6 +35,8 @@ import * as slackListener from '../lib/integrations/slack-listener.js';
 import * as telegramListener from '../lib/integrations/telegram-listener.js';
 import { wsapiTransport } from '../lib/integrations/telegram-transport.js';
 import * as slackApi from '../lib/integrations/slack-api.js';
+import * as gchatListener from '../lib/integrations/gchat-listener.js';
+import * as gchatApi from '../lib/integrations/gchat-api.js';
 import { resolve as resolveBranding } from '../lib/branding.js';
 
 // Tiny in-memory rate limiter — sliding window. Keyed on the verified actor
@@ -157,6 +159,10 @@ async function afterChange(key, { files = true, skill = true, forceRestart = fal
   // The Slack socket lives in this process: it follows the store, no restart.
   if (key === 'slack') {
     try { slackListener.reconcile(); } catch (err) { process.stderr.write(`[integrations] slack listener: ${err.message}\n`); }
+  }
+  // So does the Google Chat pull loop (the coworker's own Chat app).
+  if (key === gchatApi.ID) {
+    try { gchatListener.reconcile(); } catch (err) { process.stderr.write(`[integrations] gchat listener: ${err.message}\n`); }
   }
   // So does the Telegram poll, when workspace-api is the transport.
   if (key === 'telegram') {
@@ -310,6 +316,8 @@ export default function integrationsRouter() {
         // The Slack socket: up or not, since when, what it missed — and whether
         // the app still has to be installed (no bot token yet) and can be from here.
         ...(entry.process === 'slack-listener' && s?.active ? { listener: slackListener.status(), ...(admin ? { install: slackInstallState() } : {}) } : {}),
+        // The Google Chat pull loop: up or not, since when, what it saw.
+        ...(entry.process === 'gchat-listener' && s?.active ? { listener: gchatListener.status() } : {}),
         // The Telegram poll, when workspace-api reads Telegram itself.
         ...(entry.process === 'telegram-bot' && s?.active && wsapiTransport() ? { listener: telegramListener.status() } : {}),
       };
@@ -630,6 +638,13 @@ export default function integrationsRouter() {
         const who = await slackApi.authTest();
         const l = slackListener.status();
         return res.json({ ok: true, at, detail: `Installed in ${who.team} as @${who.user}; ${l.connected ? `listening since ${l.since}` : (l.error ? `not connected: ${l.error}` : 'connecting…')}.` });
+      }
+      if (cat.process === 'gchat-listener') {
+        // Ask Google itself: the key signs in, the loop says whether it is pulling.
+        await gchatApi.accessToken(gchatApi.SCOPE_PUBSUB);
+        await gchatApi.accessToken(gchatApi.SCOPE_BOT);
+        const l = gchatListener.status();
+        return res.json({ ok: true, at, detail: `Signed in as ${gchatApi.settings().key.client_email}; ${l.connected ? `listening since ${l.since}` : (l.error ? `not connected: ${l.error}` : 'connecting…')}.` });
       }
       const plain = store.decryptFor(target.key);
       const items = Array.isArray(plain) ? plain : [plain];

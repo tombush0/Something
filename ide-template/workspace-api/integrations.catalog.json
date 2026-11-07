@@ -407,6 +407,57 @@
       "personal": false
     },
     {
+      "id": "google-chat-app",
+      "label": "Google Chat",
+      "logo": "/integrations/gchat.svg",
+      "description": "Talk to your coworker in Google Chat through its own Chat app: a direct message is a private conversation as you; in a space an admin approved it joins in when addressed. Messages sent to the app are read by the workspace; nothing else in Google Chat is.",
+      "category": "messaging",
+      "process": "gchat-listener",
+      "teamWide": true,
+      "fields": [
+        {
+          "name": "GCHAT_APP_KEY_JSON",
+          "label": "Service account key",
+          "type": "json",
+          "placeholder": "{\n  \"type\": \"service_account\",\n  \"client_email\": \"...@....iam.gserviceaccount.com\",\n  \"private_key\": \"-----BEGIN PRIVATE KEY-----\\n...\",\n  ...\n}",
+          "helper": "The JSON key of the Chat app's service account, as Google Cloud downloaded it."
+        },
+        {
+          "name": "GCHAT_APP_SUBSCRIPTION",
+          "label": "Pub/Sub subscription",
+          "type": "text",
+          "placeholder": "projects/my-project/subscriptions/chat-events-sub",
+          "helper": "The pull subscription on the topic the Chat app publishes to."
+        }
+      ],
+      "steps": [
+        {
+          "title": "A Google Cloud project for the app",
+          "body": "In [console.cloud.google.com](https://console.cloud.google.com/projectcreate) create a project under your Workspace organisation and enable **Google Chat API**, **Cloud Pub/Sub API** and **Google Workspace Events API**."
+        },
+        {
+          "title": "The event topic",
+          "body": "**Pub/Sub** → **Topics** → **Create topic** with a default subscription (pull). On the topic's **Permissions**, give **Pub/Sub Publisher** to `chat-api-push@system.gserviceaccount.com` and to `service-PROJECT_NUMBER@gcp-sa-gsuiteaddons.iam.gserviceaccount.com` (the project number is on the project's dashboard): a Chat app made today publishes as the second."
+        },
+        {
+          "title": "The app's service account",
+          "body": "**IAM & Admin** → **Service accounts** → **Create**, no project roles. On the subscription's **Permissions**, give it **Pub/Sub Subscriber**. On the account, **Keys** → **Add key** → **JSON**; paste the file's contents into **Service account key** below and the subscription's full name into **Pub/Sub subscription**."
+        },
+        {
+          "title": "Configure the Chat app",
+          "body": "**Google Chat API** → **Configuration**: the coworker's name, an avatar URL and a description; **Interactive features** on, with **Join spaces and group conversations**; **Connection settings** → **Cloud Pub/Sub** with the topic's full name; visibility for the people who should reach it. **Save**, then **Save** here."
+        }
+      ],
+      "mcp": {
+        "allowedHosts": [
+          "oauth2.googleapis.com",
+          "pubsub.googleapis.com",
+          "chat.googleapis.com"
+        ]
+      },
+      "personal": false
+    },
+    {
       "id": "shopify",
       "label": "Shopify",
       "logo": "/integrations/shopify.svg",
@@ -1728,7 +1779,7 @@
     },
     {
       "id": "google-chat",
-      "label": "Google Chat",
+      "label": "Google Chat (your account)",
       "logo": "/integrations/gchat.svg",
       "description": "Spaces, group chats and DMs: read, search and catch up on unread, send and edit messages, react, share files and manage spaces as you.",
       "category": "messaging",
