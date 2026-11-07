@@ -426,6 +426,23 @@ export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', mess
   const NO_BUILTINS = ['Bash', 'BashOutput', 'KillShell', 'Monitor', 'Agent', 'Task', 'Workflow', 'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Glob', 'Grep', 'LS',
     'WebFetch', 'WebSearch', 'Skill', 'TaskStop', 'TaskOutput', 'TodoWrite', 'ToolSearch', 'CronCreate', 'CronDelete', 'CronList', 'ScheduleWakeup',
     'EnterWorktree', 'ExitWorktree', 'EnterPlanMode', 'ExitPlanMode', 'SendMessage', 'ListAgents', 'RemoteTrigger', 'PushNotification', 'Artifact'];
+
+  // Make sure the broker grants in CLAUDE_CONFIG_PATH (=/home/bot/.claude.json)
+  // are ones this process holds, with life left, BEFORE this turn's MCP config
+  // is written from that file below. The grants live in this process's
+  // memory, so after a restart of workspace-api the file still names the
+  // previous process's; and a grant expires 24h after issue. Renewing after
+  // the turn's config was written (as this did) left the first turn after
+  // expiry with dead grants: every brokered MCP failed "grant invalid" for
+  // that whole conversation. The pass keeps a grant with half its lifetime
+  // left and rewrites the file only when something changed, so for most
+  // turns it is a read.
+  //
+  // Failure here is non-fatal — claude still spawns with whatever the file
+  // holds. We log + continue. Safe to call from concurrent turns.
+  try { syncMcpServers(); }
+  catch (err) { process.stderr.write(`[claude/sync-mcps] ${err.message}\n`); }
+
   if (pageTurn) {
     const entry = turnMcpServers({ actor, groupContext })['workspace-api'];
     mcpServers = entry ? { 'workspace-api': entry } : {};
@@ -547,18 +564,6 @@ export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', mess
 
   if (sessionId) args.push('--resume', sessionId);
 
-  // Make sure the broker grants in CLAUDE_CONFIG_PATH (=/home/bot/.claude.json)
-  // are ones this process holds before spawning. The grants live in this
-  // process's memory, so after a restart of workspace-api the file still
-  // names the previous process's and every brokered MCP would fail to load
-  // its credentials and register no tools (seen 2026-06-03 as "only 5 MCPs").
-  // The pass keeps a grant that is still good and rewrites the file only when
-  // something changed, so for most turns it is a read.
-  //
-  // Failure here is non-fatal — claude still spawns with whatever the file
-  // holds. We log + continue. Safe to call from concurrent turns.
-  try { syncMcpServers(); }
-  catch (err) { process.stderr.write(`[claude/sync-mcps] ${err.message}\n`); }
 
   // Inject the stored OAuth token if it exists and isn't already in env.
   // This covers the self-service wizard path: token saved via /api/setup/token,
