@@ -593,10 +593,8 @@ async function handleUploadFile({ local_path, name, parent_id, mime_type }) {
     body,
     {
       query: { uploadType: 'multipart', supportsAllDrives: 'true', fields: FILE_FIELDS },
-      headers: {
-        'Content-Type':   `multipart/related; boundary=${boundary}`,
-        'Content-Length': String(body.length),
-      },
+      // No Content-Length: Node's fetch sets it from the body and refuses one set by hand (UND_ERR_INVALID_ARG).
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
     },
   );
   return compactFile(created);

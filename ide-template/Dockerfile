@@ -475,6 +475,10 @@ RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/gtasks-mcp && npm ci -
 COPY apps/gchat-mcp /opt/ide/apps/gchat-mcp
 RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/gchat-mcp && npm ci --omit=dev --no-audit --no-fund
 
+# Gmail MCP — imports ../email-mcp/attachments.js, so email-mcp (above) must be in the image.
+COPY apps/gmail-mcp /opt/ide/apps/gmail-mcp
+RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/gmail-mcp && npm ci --omit=dev --no-audit --no-fund
+
 COPY apps/x-mcp /opt/ide/apps/x-mcp
 RUN --mount=type=cache,target=/root/.npm cd /opt/ide/apps/x-mcp && npm ci --omit=dev --no-audit --no-fund
 

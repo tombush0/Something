@@ -753,10 +753,8 @@ async function uploadAttachment(space, filePath) {
   const body = Buffer.concat([head, bytes, tail]);
   const uploaded = await api.post(`${UPLOAD_BASE}/${path(space)}/attachments:upload`, body, {
     query: { uploadType: 'multipart' },
-    headers: {
-      'Content-Type':   `multipart/related; boundary=${boundary}`,
-      'Content-Length': String(body.length),
-    },
+    // No Content-Length: Node's fetch sets it from the body and refuses one set by hand (UND_ERR_INVALID_ARG).
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
   });
   if (!uploaded?.attachmentDataRef) throw new Error('Upload returned no attachment reference.');
   return uploaded.attachmentDataRef;

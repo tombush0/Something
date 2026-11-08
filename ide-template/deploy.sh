@@ -608,6 +608,12 @@ done
 ship apps/gchat-mcp/index.js     "$HETZNER_HOST:$REMOTE_PATH/apps/gchat-mcp/" || exit 1
 ship apps/gchat-mcp/package.json "$HETZNER_HOST:$REMOTE_PATH/apps/gchat-mcp/" || exit 1
 
+# Gmail MCP — Gmail API with its own tile and OAuth client, beside the IMAP
+# email MCP (whose attachments.js it shares, shipped above).
+for f in index.js compose.js mime.js signature.js package.json; do
+  ship "apps/gmail-mcp/$f" "$HETZNER_HOST:$REMOTE_PATH/apps/gmail-mcp/" || exit 1
+done
+
 # Lockfiles: every app that has one next to its package.json gets it shipped,
 # so the build installs the versions that were tested rather than whatever
 # resolves on build day. Runs after every apps/ directory above exists on
