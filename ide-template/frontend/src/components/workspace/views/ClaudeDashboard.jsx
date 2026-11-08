@@ -62,6 +62,7 @@ export default function ClaudeDashboard({ fileEventNonce, sidebarOpen, onSelect 
   // Telegram — connection state (from the integrations catalog) + group count.
   const tg = useApi('/api/team/telegram-groups');
   const sl = useApi('/api/team/channels?kind=slack');
+  const gc = useApi('/api/team/channels?kind=gchat');
   const integrations = useApi('/api/integrations');
   const skills = useApi('/api/skills');
 
@@ -212,6 +213,24 @@ export default function ClaudeDashboard({ fileEventNonce, sidebarOpen, onSelect 
     activatedAt: slConnected ? (slIntegration?.activatedAt || null) : null,
   };
 
+  // Google Chat — the spaces the assistant is in, the ones waiting for a yes.
+  const gcCount = gc.data?.groups?.length || 0;
+  const gcPending = gc.data?.pending?.length || 0;
+  const gcIntegration = (integrations.data?.integrations || []).find(i => i.id === 'google-chat-app') || null;
+  const gcConnected = !!gcIntegration?.active;
+  const gchatTile = {
+    id: 'gchat',
+    mark: `${BASE}/integrations/gchat.svg`,
+    logo: <TileBanner image={`${BASE}/integrations/gchat.svg`} mode="dark" seed="gchat" soft />,
+    label: 'Google Chat',
+    description: gcConnected
+      ? (gcPending ? `${gcPending} space${gcPending > 1 ? 's' : ''} waiting for approval` : gcCount ? `In ${gcCount} space${gcCount > 1 ? 's' : ''}` : 'Connected · direct messages, spaces on approval')
+      : 'The bot in your Google Chat: connect your own Chat app to get started.',
+    active: gcConnected,
+    credential: gcConnected ? `••••${gcIntegration?.credentialSummary?.last4 || ''}` : null,
+    activatedAt: gcConnected ? (gcIntegration?.activatedAt || null) : null,
+  };
+
   // The browser extension: moved here from the sidebar, last of the tiles.
   const browserAgentTile = {
     id: 'browser-agent',
@@ -283,6 +302,11 @@ export default function ClaudeDashboard({ fileEventNonce, sidebarOpen, onSelect 
                   <SettingTile
                     tile={slackTile}
                     onOpen={() => onSelect && onSelect({ path: '.claude/slack', type: 'slack' })}
+                    canEdit={isAdmin}
+                  />
+                  <SettingTile
+                    tile={gchatTile}
+                    onOpen={() => onSelect && onSelect({ path: '.claude/gchat', type: 'gchat' })}
                     canEdit={isAdmin}
                   />
                 </>

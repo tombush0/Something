@@ -47,6 +47,7 @@ const VIEW_ROUTES = [
   { path: '/memory',       selected: { path: 'memory',             type: 'memory' } },
   { path: '/telegram',     selected: { path: '.claude/telegram',   type: 'telegram' } },
   { path: '/slack',        selected: { path: '.claude/slack',      type: 'slack' } },
+  { path: '/google-chat',  selected: { path: '.claude/gchat',      type: 'gchat' } },
   { path: '/notifications',selected: { path: '.notifications',     type: 'notifications' } },
   { path: '/settings',     selected: { path: '.settings',          type: 'settings' } },
 ];
@@ -244,6 +245,8 @@ export default function WorkspacePage() {
   const slackEntry = integrationsData?.integrations?.find(i => i.id === 'slack') || null;
   const isTelegramActive = !!telegramEntry?.active;
   const isSlackActive = !!slackEntry?.active;
+  const gchatEntry = integrationsData?.integrations?.find(i => i.id === 'google-chat-app') || null;
+  const isGchatActive = !!gchatEntry?.active;
   // Connect opens that place's connect modal in place; the bar steps aside while
   // it is open and comes back only if the modal closes without a connection.
   const [setupFor, setSetupFor] = useState(null);   // the catalog entry being connected
@@ -255,7 +258,7 @@ export default function WorkspacePage() {
   // Only an admin can switch Telegram on, so only an admin is asked to; a
   // member gets the link bar below once it is on.
   const { data: meForBanner } = useApi('/api/me');
-  const showBanner = !!integrationsData && (meForBanner?.isAdmin || meForBanner?.role === 'admin') && !isTelegramActive && !isSlackActive && !bannerDismissed && !setupFor && !placeJustConnected;
+  const showBanner = !!integrationsData && (meForBanner?.isAdmin || meForBanner?.role === 'admin') && !isTelegramActive && !isSlackActive && !isGchatActive && !bannerDismissed && !setupFor && !placeJustConnected;
   const connectPlace = (entry, id) => entry ? setSetupFor(entry) : handleSelect({ path: `.claude/${id}`, type: id });
 
   const dismissBanner = () => {
@@ -350,7 +353,7 @@ export default function WorkspacePage() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                {[['slack', 'Slack', slackEntry], ['telegram', 'Telegram', telegramEntry]].map(([id, label, entry]) => (
+                {[['slack', 'Slack', slackEntry], ['gchat', 'Google Chat', gchatEntry], ['telegram', 'Telegram', telegramEntry]].map(([id, label, entry]) => (
                   <button
                     key={id}
                     type="button"

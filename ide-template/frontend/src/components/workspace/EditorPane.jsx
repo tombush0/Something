@@ -23,6 +23,7 @@ import { LegacyMemoryNotice } from './MemoryMigration.jsx';
 import { useMemoryStatus } from './useMemoryStatus.js';
 import TelegramDashboard  from './views/TelegramDashboard.jsx';
 import SlackDashboard     from './views/SlackDashboard.jsx';
+import GoogleChatDashboard from './views/GoogleChatDashboard.jsx';
 import NotificationsView  from './views/NotificationsView.jsx';
 import SettingsView       from './views/SettingsView.jsx';
 import BrowserAgentView   from './views/BrowserAgentView.jsx';
@@ -134,6 +135,7 @@ function ActiveView({ selected, fileEventNonce, onSelect, sidebarOpen }) {
   if (type === 'memory')                                 return <MemoryView fileEventNonce={fileEventNonce} sidebarOpen={sidebarOpen} onSelect={onSelect} />;
   if (type === 'telegram')                               return <TelegramDashboard sidebarOpen={sidebarOpen} onSelect={onSelect} />;
   if (type === 'slack')                                  return <SlackDashboard sidebarOpen={sidebarOpen} />;
+  if (type === 'gchat')                                  return <GoogleChatDashboard sidebarOpen={sidebarOpen} />;
   if (type === 'notifications')                          return <NotificationsView sidebarOpen={sidebarOpen} />;
   if (type === 'settings')                               return <SettingsView sidebarOpen={sidebarOpen} />;
   if (type === 'miniapp')                                return (

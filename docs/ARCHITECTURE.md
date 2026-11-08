@@ -573,6 +573,34 @@ once (`channel:ts`); events sent while the socket was down are lost and the gap
 is recorded (`listener.lost` on `GET /api/integrations`), never hidden. The
 primary admin's Slack DM is a turn like anyone's: the tmux brain is Telegram's.
 
+## Google Chat surface
+
+Slack's twin, for the workspace's own Google Chat app. The Chat app is
+configured with a Cloud Pub/Sub connection: Chat publishes every interaction
+event (a DM, an @mention, being added to or removed from a space) to the
+app's topic, and **workspace-api pulls it** (`lib/integrations/gchat-listener.js`,
+started by `reconcile()` at boot and after every save of the `google-chat-app`
+integration) — one outbound request at a time, nothing listening. A space's
+other messages, and its joins and leaves, come from a **Workspace Events
+subscription** on the space (administrator-approved `chat.app.*` scopes),
+published to the same topic as CloudEvents. `lib/integrations/gchat-api.js` is
+the little of Pub/Sub, Chat, Workspace Events and the Admin SDK directory the
+surface uses (no SDK; the service-account key is decrypted per token mint).
+
+| Event | Path | Runs as |
+|---|---|---|
+| a DM from a roster person (matched by the email Chat sends, kept as `gchatUserId`) | `gchat-dm.js` → `member-dm.js` with `surface: 'gchat'`; a working line is posted at once and turned into the answer | their turn slot |
+| a DM from anyone else | one fixed line, once; listed as pending for an admin | — |
+| the app added to a space | a request for an admin (`.team/gchat-pending-spaces.json`); an admin adding it is the yes; not approved in 24 h → declined (the app cannot leave: it stays silent, the admins are told to remove it) | — |
+| a message in an approved space (the subscription's copy, or the @mention's — seen once) | `gchat-spaces.js` → the group watcher through the Google Chat channel adapter, only while everyone in the space is on the roster or the space is open to outsiders | `turn-group` |
+| someone joins or leaves | the audience check: each member's Chat id → email through the directory → the roster | — |
+| a subscription expiring / expired / suspended | renewed / made anew / the admins are told (`.team/gchat-subscriptions.json`) | — |
+
+Every pulled batch is acknowledged before it is handled and every event is
+seen once (the Pub/Sub message id, the Chat message name). Nothing is lost
+while workspace-api is down: Pub/Sub keeps what was not pulled for seven
+days, so an outage is a delay, not a gap (`listener.outages`).
+
 ## Context MCP (coding agents)
 
 The workspace as an MCP server: a person's Claude Code, Codex or Cursor

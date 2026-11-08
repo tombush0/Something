@@ -857,6 +857,30 @@ it. What differs is how it gets in and who may be in it
   not the roster one — never a self-service link by id, which would let a
   person claim another's account.
 
+### Google Chat spaces
+
+A Google Chat space is a room of the same kind as a Slack channel — the same
+watcher, decision, group turn and rules — behind the Google Chat channel
+adapter; its id is `gchat-<space id>` (`lib/integrations/gchat-spaces.js`).
+What differs, because of what Chat allows an app:
+
+- **Hearing the whole space** needs the administrator-approved `chat.app.*`
+  scopes: an approved space gets a Workspace Events subscription that brings
+  every message and every join or leave. Without it the assistant hears only
+  its @mentions there.
+- **People** are known by their Chat id; the email comes with a DM or an
+  @mention, and for anyone else from the Workspace directory (read-only
+  delegation). A teammate found either way is linked (`gchatUserId`).
+- **The app cannot leave.** Declining a space, or a request no admin answered
+  within a day, makes it silent there; someone in the space removes it
+  (space menu → Apps & integrations).
+- **No reactions, no uploads, no typing.** A short working line stands under
+  the message being answered while the turn works; a file is named with where
+  it lives in the workspace.
+- **Threads**: every Chat message sits in a thread, and the watcher's thread
+  rules apply as on Slack (a reply in a thread stays there; a busy space or a
+  long answer opens the thread under the message).
+
 ### Where a person meets their surfaces — team mode
 
 One rule for every surface: the roster entry (email) is the person; each
