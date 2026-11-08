@@ -72,6 +72,8 @@ ok('a token near its end is minted again', (await api.accessToken(api.SCOPE_PUBS
 const batch = await api.pull();
 ok('a pull decodes what Chat published', batch.length === 2 && batch[0].event?.chat?.user?.name === 'users/1' && batch[0].ackId === 'ack-1', batch[0]);
 ok('...and keeps an undecodable message as an empty event, still ackable', batch[1].event === null && batch[1].ackId === 'ack-2');
+await api.pull({ immediate: true });
+ok('an immediate pull sets returnImmediately', calls.some(x => x.url.endsWith(':pull') && /returnImmediately/.test(JSON.stringify(x.body ?? x.init?.body ?? x))));
 ok('...from the configured subscription', calls.some(x => x.url === `https://pubsub.googleapis.com/v1/${SUB}:pull` && x.method === 'POST'));
 await api.acknowledge(batch.map(m => m.ackId));
 const ack = calls.filter(x => x.url.endsWith(':acknowledge')).pop();

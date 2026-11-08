@@ -42,6 +42,9 @@ import { __setGchatStatus } from './channel-adapter.js';
 const ID = api.ID;
 const BACKOFF_MIN_MS = 2000, BACKOFF_MAX_MS = 60_000;
 const EMPTY_PULL_PAUSE_MS = 500;
+// A held pull is cut after this and counts as empty: a connection the proxy
+// or network dropped silently must not stall the loop for good.
+const PULL_TIMEOUT_MS = 90_000;
 const SEEN_TTL_MS = 60 * 60_000;
 const OUTAGES_KEPT = 5;
 // Errors no retry fixes: the key, the subscription, or the account behind them.
@@ -296,10 +299,15 @@ function markUp() {
 }
 
 /** One pull, its acknowledgement, then the events (not awaited: a turn must not stall the stream). */
-export async function pullOnce(deps = {}, generation = st.generation) {
+export async function pullOnce(deps = {}, generation = st.generation, { immediate = false, timeoutMs = PULL_TIMEOUT_MS } = {}) {
   const a = deps.api || api;
-  st.abort = new AbortController();
-  const batch = await a.pull({ max: 10, signal: st.abort.signal });
+  const abort = st.abort = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; abort.abort(); }, timeoutMs);
+  let batch;
+  try { batch = await a.pull({ max: 10, signal: abort.signal, immediate }); }
+  catch (err) { if (!timedOut) throw err; batch = []; }
+  finally { clearTimeout(timer); }
   st.lastPullAt = new Date().toISOString();
   if (generation !== st.generation) return 0;
   markUp();
@@ -311,9 +319,11 @@ export async function pullOnce(deps = {}, generation = st.generation) {
 
 async function runLoop(generation) {
   let backoff = BACKOFF_MIN_MS;
+  let first = true;
   while (st.running && generation === st.generation) {
     try {
-      const n = await pullOnce({}, generation);
+      const n = await pullOnce({}, generation, { immediate: first });
+      first = false;
       backoff = BACKOFF_MIN_MS;
       if (!n) await new Promise(r => setTimeout(r, EMPTY_PULL_PAUSE_MS));
     } catch (err) {

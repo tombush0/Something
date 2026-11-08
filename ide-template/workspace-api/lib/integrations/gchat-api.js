@@ -183,9 +183,14 @@ export async function call(scope, method, url, body, { retried = false, signal =
  * returned. Each is { ackId, messageId, publishTime, attributes, event } with
  * `event` the decoded JSON (null when the data is not JSON).
  */
-export async function pull({ max = 10, signal } = {}) {
+/**
+ * One synchronous pull. Pub/Sub holds the request open while the queue is
+ * empty, so `immediate` (returnImmediately) is used once per start: it
+ * answers at once and proves the subscription is reachable.
+ */
+export async function pull({ max = 10, signal, immediate = false } = {}) {
   const { subscription } = settings();
-  const r = await call(SCOPE_PUBSUB, 'POST', `${PUBSUB}/${subscription}:pull`, { maxMessages: max }, { signal });
+  const r = await call(SCOPE_PUBSUB, 'POST', `${PUBSUB}/${subscription}:pull`, { maxMessages: max, ...(immediate ? { returnImmediately: true } : {}) }, { signal });
   return (r?.receivedMessages || []).map((m) => {
     let event = null;
     try { event = JSON.parse(Buffer.from(m.message?.data || '', 'base64').toString('utf8')); } catch { event = null; }

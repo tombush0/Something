@@ -94,6 +94,19 @@ ok('a successful pull marks the loop connected', L.status().connected && L.statu
 ok('the listener keeps its state in the project, without secrets',
   !existsSync(join(ROOT, '.team', 'gchat-listener-state.json')) || !/private_key|BEGIN/.test(readFileSync(join(ROOT, '.team', 'gchat-listener-state.json'), 'utf8')));
 
+// A held pull that never answers is cut and counts as empty; the loop stays up.
+L.__reset();
+const hanging = { pull: ({ signal }) => new Promise((_, rej) => signal.addEventListener('abort', () => rej(new Error('aborted')))), acknowledge: async () => {} };
+ok('a pull that hangs past its limit counts as empty', (await L.pullOnce({ api: hanging }, undefined, { timeoutMs: 30 })) === 0 && L.status().connected);
+// The first pull of a start asks Pub/Sub to answer at once.
+let seenImmediate = null;
+await L.pullOnce({ api: { pull: async (o) => { seenImmediate = o.immediate; return []; }, acknowledge: async () => {} } }, undefined, { immediate: true });
+ok('the first pull asks for an immediate answer', seenImmediate === true);
+// A real failure still surfaces.
+let threw = false;
+try { await L.pullOnce({ api: { pull: async () => { throw new Error('403 denied'); } } }, undefined, { timeoutMs: 1000 }); } catch { threw = true; }
+ok('a pull that fails (not a timeout) still throws', threw);
+
 L.__reset();
 console.log(`\ngchat-listener: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
