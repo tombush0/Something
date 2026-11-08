@@ -428,6 +428,22 @@
           "type": "text",
           "placeholder": "projects/my-project/subscriptions/chat-events-sub",
           "helper": "The pull subscription on the topic the Chat app publishes to."
+        },
+        {
+          "name": "GCHAT_APP_TOPIC",
+          "label": "Pub/Sub topic",
+          "type": "text",
+          "optional": true,
+          "placeholder": "projects/my-project/topics/chat-events",
+          "helper": "The topic itself. With it, an approved space's every message reaches the coworker, not only its @mentions (needs the administrator approval in step 5)."
+        },
+        {
+          "name": "GCHAT_DIRECTORY_ADMIN",
+          "label": "Directory admin",
+          "type": "text",
+          "optional": true,
+          "placeholder": "admin@yourcompany.com",
+          "helper": "An admin of your Workspace the directory lookup acts as (read-only, step 6). With it, everyone in a space is known by email, as on Slack."
         }
       ],
       "steps": [
@@ -446,13 +462,23 @@
         {
           "title": "Configure the Chat app",
           "body": "**Google Chat API** → **Configuration**: the coworker's name, an avatar URL and a description; **Interactive features** on, with **Join spaces and group conversations**; **Connection settings** → **Cloud Pub/Sub** with the topic's full name; visibility for the people who should reach it. **Save**, then **Save** here."
+        },
+        {
+          "title": "Let it hear whole spaces (administrator approval)",
+          "body": "On the service account, **Advanced settings** → **Create Google Workspace Marketplace-compatible OAuth client**. Enable **Google Workspace Marketplace SDK** → **App Configuration**: visibility **Private**, **Individual + admin install**, **Google Workspace add-on** with **HTTP or other deployments** and **Standalone Chat app**, and the scopes\n\n```\nhttps://www.googleapis.com/auth/chat.app.messages.readonly\nhttps://www.googleapis.com/auth/chat.app.memberships.readonly\nhttps://www.googleapis.com/auth/chat.app.spaces.readonly\n```\n\n→ **Save draft**. Then in the **Admin console** → **Apps** → **Google Workspace Marketplace apps** → install the app for **Everyone at your organization**. Fill in **Pub/Sub topic** below."
+        },
+        {
+          "title": "Know everyone in a space (directory, read-only)",
+          "body": "Enable **Admin SDK API**. In the **Admin console** → **Security** → **API controls** → **Manage domain-wide delegation** → **Add new**: the service account's client id and the one scope `https://www.googleapis.com/auth/admin.directory.user.readonly`. Fill in **Directory admin** below with an admin's email; the lookup reads user profiles as them and changes nothing."
         }
       ],
       "mcp": {
         "allowedHosts": [
           "oauth2.googleapis.com",
           "pubsub.googleapis.com",
-          "chat.googleapis.com"
+          "chat.googleapis.com",
+          "workspaceevents.googleapis.com",
+          "admin.googleapis.com"
         ]
       },
       "personal": false

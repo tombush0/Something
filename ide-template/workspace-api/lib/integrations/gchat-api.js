@@ -15,7 +15,18 @@
  *
  * What app authentication cannot do (checked against a real workspace,
  * 2026-11-07): add reactions, upload attachments, or see member emails —
- * callers get those from the event (sender email) or not at all.
+ * callers get those from the event (sender email) or the directory.
+ *
+ * With an administrator's approval (the chat.app.* scopes, granted once in the
+ * Admin console) the app may also read every message of a space it is in and
+ * subscribe to a space's events — that is how it hears a space's whole
+ * conversation, not only its @mentions. A subscription lives 24 hours and is
+ * renewed; the app cannot read or delete one, only create and renew.
+ *
+ * The directory: with domain-wide delegation for
+ * admin.directory.user.readonly, acting as an admin of the domain, a Chat
+ * user id (users/<id>) is the same id as the Workspace user, so it resolves to
+ * an email — the one thing a space's member list does not give.
  */
 import { createSign } from 'node:crypto';
 import { ProxyAgent } from 'undici';
@@ -27,6 +38,18 @@ const PUBSUB = 'https://pubsub.googleapis.com/v1';
 const CHAT = 'https://chat.googleapis.com/v1';
 export const SCOPE_PUBSUB = 'https://www.googleapis.com/auth/pubsub';
 export const SCOPE_BOT = 'https://www.googleapis.com/auth/chat.bot';
+// The administrator-approved scopes, space-separated into one token.
+export const SCOPE_APP_EVENTS = 'https://www.googleapis.com/auth/chat.app.messages.readonly https://www.googleapis.com/auth/chat.app.memberships.readonly';
+export const SCOPE_DIRECTORY = 'https://www.googleapis.com/auth/admin.directory.user.readonly';
+const EVENTS = 'https://workspaceevents.googleapis.com/v1';
+const DIRECTORY = 'https://admin.googleapis.com/admin/directory/v1';
+// What a space subscription listens for: what was said, and who came and went
+// (the audience check runs on every join and leave).
+export const SPACE_EVENT_TYPES = [
+  'google.workspace.chat.message.v1.created',
+  'google.workspace.chat.membership.v1.created',
+  'google.workspace.chat.membership.v1.deleted',
+];
 export const TEXT_MAX = 4000;   // Chat accepts more; one screen of text reads better
 
 const PROXY_URL = process.env.GCHAT_PROXY_URL ?? process.env.MCP_OAUTH_PROXY_URL ?? 'http://egress-proxy:3130';
@@ -71,7 +94,16 @@ export function settings() {
   if (!/^projects\/[a-z][a-z0-9-]{4,29}\/subscriptions\/[A-Za-z][\w.~+%-]{2,254}$/.test(subscription)) {
     throw new GchatError('settings', 'bad_subscription', 'expected projects/<project>/subscriptions/<name>');
   }
-  return { key, subscription };
+  // Optional: the topic space subscriptions publish to, and the admin the
+  // directory lookup acts as. Without them a space hears only its @mentions
+  // and its members are known only once they write.
+  const topic = String(plain?.GCHAT_APP_TOPIC || '').trim();
+  const directoryAdmin = String(plain?.GCHAT_DIRECTORY_ADMIN || '').trim().toLowerCase();
+  return {
+    key, subscription,
+    topic: /^projects\/[a-z][a-z0-9-]{4,29}\/topics\/[A-Za-z][\w.~+%-]{2,254}$/.test(topic) ? topic : null,
+    directoryAdmin: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(directoryAdmin) ? directoryAdmin : null,
+  };
 }
 
 async function send(url, init, { allowFallback = true } = {}) {
@@ -88,33 +120,34 @@ async function send(url, init, { allowFallback = true } = {}) {
 
 // ─── sign-in ─────────────────────────────────────────────────────────────────
 
-const tokens = new Map();   // scope → { value, exp }
+const tokens = new Map();   // `${scope}|${subject}` → { value, exp }
 
-/** A signed JWT assertion for one scope (exported for the tests). */
-export function assertion(key, scope, now = Date.now()) {
+/** A signed JWT assertion for one scope, optionally acting as `sub` (exported for the tests). */
+export function assertion(key, scope, now = Date.now(), sub = null) {
   const iat = Math.floor(now / 1000);
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: key.client_email, scope, aud: TOKEN_URL, iat, exp: iat + 3600 })}`;
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: key.client_email, scope, aud: TOKEN_URL, iat, exp: iat + 3600, ...(sub ? { sub } : {}) })}`;
   const sig = createSign('RSA-SHA256').update(unsigned).sign(key.private_key).toString('base64url');
   return `${unsigned}.${sig}`;
 }
 
-/** An access token for `scope`, minted with the stored key when the cached one is near its end. */
-export async function accessToken(scope, now = Date.now()) {
-  const t = tokens.get(scope);
+/** An access token for `scope` (as `sub` when given), minted with the stored key when the cached one is near its end. */
+export async function accessToken(scope, now = Date.now(), sub = null) {
+  const cacheKey = `${scope}|${sub || ''}`;
+  const t = tokens.get(cacheKey);
   if (t && t.exp - 60_000 > now) return t.value;
   const { key } = settings();
   const resp = await send(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: assertion(key, scope, now) }).toString(),
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: assertion(key, scope, now, sub) }).toString(),
   });
   let data = null;
   try { data = await resp.json(); } catch { /* below */ }
   if (!resp.ok || !data?.access_token) {
     throw new GchatError('token', resp.status, data?.error_description || data?.error || '', { code: data?.error || `http_${resp.status}` });
   }
-  tokens.set(scope, { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) * 1000 });
+  tokens.set(cacheKey, { value: data.access_token, exp: now + (Number(data.expires_in) || 3600) * 1000 });
   return data.access_token;
 }
 
@@ -123,8 +156,8 @@ export async function accessToken(scope, now = Date.now()) {
  * GchatError with Google's message. A 401 drops the cached token and retries
  * once; a 429 waits a little and retries once.
  */
-export async function call(scope, method, url, body, { retried = false, signal = undefined } = {}) {
-  const tok = await accessToken(scope);
+export async function call(scope, method, url, body, { retried = false, signal = undefined, sub = null } = {}) {
+  const tok = await accessToken(scope, Date.now(), sub);
   const resp = await send(url, {
     method,
     headers: { Authorization: `Bearer ${tok}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
@@ -132,9 +165,9 @@ export async function call(scope, method, url, body, { retried = false, signal =
     ...(signal ? { signal } : {}),
   });
   if ((resp.status === 401 || resp.status === 429) && !retried) {
-    if (resp.status === 401) tokens.delete(scope);
+    if (resp.status === 401) tokens.delete(`${scope}|${sub || ''}`);
     else await new Promise(r => setTimeout(r, Math.min(Number(resp.headers?.get?.('retry-after')) || 2, 30) * 1000));
-    return call(scope, method, url, body, { retried: true, signal });
+    return call(scope, method, url, body, { retried: true, signal, sub });
   }
   const text = await resp.text();
   let data = null;
@@ -240,6 +273,75 @@ export async function downloadAttachment(resourceName, { maxBytes = 25 * 1024 * 
   const buf = Buffer.from(await resp.arrayBuffer());
   if (buf.length > maxBytes) throw new GchatError('media', 'too_large', '');
   return buf;
+}
+
+// ─── space subscriptions (Workspace Events, administrator-approved) ──────────
+
+// A Workspace Events call answers with a long-running operation; it is done
+// at once in practice, else it is read again a few times.
+async function settle(op, { tries = 8, gap = 1500 } = {}) {
+  let o = op;
+  for (let i = 0; i < tries && o && !o.done && o.name; i++) {
+    await new Promise(r => setTimeout(r, gap));
+    o = await call(SCOPE_APP_EVENTS, 'GET', `${EVENTS}/${o.name}`);
+  }
+  if (o?.error) throw new GchatError('subscription', o.error.code || 'failed', o.error.message || '');
+  return o?.response || o || null;
+}
+
+/**
+ * Subscribe to a space's messages and memberships, published to the app's
+ * topic. Returns { name, expireTime, state }, or { exists: true } when a
+ * subscription for that space is already there (the app cannot read it back;
+ * it lapses within a day and is made again).
+ */
+export async function createSpaceSubscription(space) {
+  const { topic } = settings();
+  if (!topic) throw new GchatError('subscription', 'no_topic', 'the Pub/Sub topic is not set');
+  try {
+    const op = await call(SCOPE_APP_EVENTS, 'POST', `${EVENTS}/subscriptions`, {
+      targetResource: `//chat.googleapis.com/${check('space', space)}`,
+      eventTypes: SPACE_EVENT_TYPES,
+      notificationEndpoint: { pubsubTopic: topic },
+      payloadOptions: { includeResource: true },
+    });
+    const sub = await settle(op);
+    return { name: sub?.name || null, expireTime: sub?.expireTime || null, state: sub?.state || null };
+  } catch (err) {
+    if (err.status === 409 || err.reason === 'ALREADY_EXISTS') return { exists: true };
+    throw err;
+  }
+}
+
+/** Extend a subscription to its longest life. Returns { name, expireTime }; a 404 means it is gone (make a new one). */
+export async function renewSubscription(name) {
+  const n = String(name || '');
+  if (!/^subscriptions\/[A-Za-z0-9_-]{4,200}$/.test(n)) throw new GchatError('subscription', 'bad_name', JSON.stringify(n.slice(0, 80)));
+  const op = await call(SCOPE_APP_EVENTS, 'PATCH', `${EVENTS}/${n}?updateMask=ttl`, { ttl: '0s' });
+  const sub = await settle(op);
+  return { name: sub?.name || n, expireTime: sub?.expireTime || null, state: sub?.state || null };
+}
+
+// ─── the directory (domain-wide delegation, read-only) ───────────────────────
+
+/**
+ * The Workspace user behind a Chat user id: { email, name, suspended }, or
+ * null when the directory is not set up or does not know them (someone from
+ * another organisation).
+ */
+export async function directoryUser(userId) {
+  const { directoryAdmin } = settings();
+  if (!directoryAdmin) return null;
+  const id = String(userId || '').replace(/^users\//, '');
+  if (!/^\d{5,30}$/.test(id)) return null;
+  try {
+    const u = await call(SCOPE_DIRECTORY, 'GET', `${DIRECTORY}/users/${id}?projection=basic&viewType=domain_public`, undefined, { sub: directoryAdmin });
+    if (!u?.primaryEmail) return null;
+    return { email: String(u.primaryEmail).toLowerCase(), name: u.name?.fullName || null, suspended: !!u.suspended };
+  } catch (err) {
+    if (err.status === 404 || err.status === 403) return null;
+    throw err;
+  }
 }
 
 /** Cut a long text at paragraph, line, then word boundaries (exported for the tests). */

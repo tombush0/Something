@@ -333,7 +333,7 @@ async function main() {
   // are siblings both in the repo and in the image (/opt/ide/*).
   const { pathInScope, pathInGroupScope, transcriptAllowed } = await import(new URL('../workspace-api/lib/scope-rule.js', import.meta.url));
   // Is this person in that room? The registry answers (the room's members by
-  // their Telegram or Slack id, the person's ids on the roster); unreadable
+  // their Telegram, Slack or Google Chat id, the person's ids on the roster); unreadable
   // registry → nobody is (fail closed: a transcript is never shown by mistake).
   const groupId = process.env.IDE_GROUP_ID || null;
   let roster = null, groups = null;
@@ -342,7 +342,7 @@ async function main() {
     if (groups == null) { try { groups = JSON.parse(readFileSync(join(PROJECT_DIR, '.team-config.json'), 'utf8')).groups || {}; } catch { groups = {}; } }
     const me = (Array.isArray(roster) ? roster : []).find(m => m && m.slug === ownSlug);
     const members = Object.keys(groups[roomId]?.members || {});
-    return !!me && members.some(id => id === String(me.telegramChatId || '') || id === String(me.slackUserId || ''));
+    return !!me && members.some(id => id === String(me.telegramChatId || '') || id === String(me.slackUserId || '') || id === String(me.gchatUserId || ''));
   };
 
   const toolName = data.tool_name || data.toolName || '';

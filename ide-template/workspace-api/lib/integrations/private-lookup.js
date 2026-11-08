@@ -33,7 +33,7 @@
  * watcher, and the difference is only how the room's people are known.
  */
 import { runClaudeTurn, turnMcpServers } from '../claude.js';
-import { list as rosterList, userByChatId, userBySlackId } from '../team.js';
+import { list as rosterList, userByChatId, userBySlackId, userByGchatId } from '../team.js';
 import { groupIdKind } from '../group-id.js';
 import * as integrationsStore from './store.js';
 import * as integrationsCatalog from './catalog.js';
@@ -80,10 +80,10 @@ let runner = null;
 /** Replace the one-shot (tests): `fn({ member, question, room, people, prompt }) → { answer, nothing }`. */
 export function configureLookup(fn) { runner = fn; }
 
-/** People in the room who are not on the roster, by name — Slack from the audience check, Telegram from the members seen. */
+/** People in the room who are not on the roster, by name — Slack and Google Chat from the audience check, Telegram from the members seen. */
 export function outsidersOf(group) {
   if (!group) return [];
-  if (groupIdKind(group.chatId) === 'slack') {
+  if (groupIdKind(group.chatId) === 'slack' || groupIdKind(group.chatId) === 'gchat') {
     const a = group.audience;
     if (!a || a.ok !== false) return [];
     return (a.outsiders || []).map(o => (typeof o === 'string' ? o : o?.name || o?.id || 'someone'));
@@ -96,9 +96,9 @@ export function outsidersOf(group) {
 /** Everyone the room is known to hold, by the name the roster (or the room) gives them. */
 export function peopleInRoom(group) {
   const names = new Set();
-  const slack = groupIdKind(group?.chatId) === 'slack';
+  const kind = groupIdKind(group?.chatId);
   for (const [id, name] of Object.entries(group?.members || {})) {
-    const m = slack ? userBySlackId(id) : userByChatId(id);
+    const m = kind === 'slack' ? userBySlackId(id) : kind === 'gchat' ? userByGchatId(id) : userByChatId(id);
     names.add(m ? (m.displayName || m.slug) : (name || id));
   }
   for (const o of outsidersOf(group)) names.add(o);

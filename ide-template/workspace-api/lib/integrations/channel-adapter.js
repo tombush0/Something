@@ -6,15 +6,15 @@
  * history, memory) is the same for every platform; only this file knows that
  * Telegram takes a chat id and Slack a channel and a thread.
  *
- * Two adapters: Telegram over telegram-sync.js (what the watcher called
- * directly before), Slack over slack-api.js. Tests swap one in with
+ * Three adapters: Telegram over telegram-sync.js (what the watcher called
+ * directly before), Slack over slack-api.js, Google Chat over gchat-api.js. Tests swap one in with
  * `__setAdapter`.
  */
 import { realpathSync, statSync, readFileSync } from 'node:fs';
 import { basename, resolve, sep } from 'node:path';
 import { PROJECT_DIR } from '../config.js';
 import { groupIdKind } from '../group-id.js';
-import { userByChatId, userBySlackId } from '../team.js';
+import { userByChatId, userBySlackId, userByGchatId } from '../team.js';
 
 const FILE_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -192,8 +192,13 @@ function slackAdapter() {
      */
     replyRef(target) {
       const t = target && target.thread_id;
-      return t && /^\d+\.\d+$/.test(String(t)) ? { thread_ts: String(t) } : {};
+      return t && this.threadOk(t) ? { thread_ts: String(t) } : {};
     },
+    // Threads: a thread is named by its parent's ts, and a reply under a
+    // channel message opens the thread named by that message's own ts.
+    threads: true,
+    threadOk(t) { return /^\d+\.\d+$/.test(String(t || '')); },
+    threadOfMessage(messageId) { return String(messageId || ''); },
     async creatorOf() { return null; },   // a Slack channel is approved by an admin, never by its creator
     async afterRegister() { /* nothing to re-seed */ },
     _listener: listener,
@@ -208,16 +213,107 @@ function slackSelf() {
   return null;
 }
 
+// ─── Google Chat ─────────────────────────────────────────────────────────────
+
+/** `gchat-<id>` → `spaces/<id>`. */
+export function gchatSpaceOf(chatId) {
+  const s = String(chatId || '').trim();
+  return s.startsWith('gchat-') ? `spaces/${s.slice(6)}` : s;
+}
+
+// The coworker's own Chat app, as a room's platform. A space is threaded: every
+// message sits in a thread, and its id starts with that thread's id
+// ("kfBAim9r3Lc.rTYTbh6iv1M" is in thread "kfBAim9r3Lc"). The app can neither
+// react nor upload (Chat refuses both with app authentication), so the working
+// mark is a short line posted under the message while the turn works, and a
+// file is named rather than attached.
+function gchatAdapter() {
+  const api = () => import('./gchat-api.js');
+  const dm = () => import('./gchat-dm.js');
+  const working = new Map();   // `${chatId}|${messageId}` → the working line's name
+  const threadName = (chatId, t) => `${gchatSpaceOf(chatId)}/threads/${t}`;
+  const shortId = (name) => String(name || '').split('/messages/')[1] || null;
+  return {
+    kind: 'gchat',
+    label: 'Google Chat',
+    roomNoun: 'Google Chat SPACE',
+    replyMax: 4000,
+    prompt: {
+      otherBots: '- OTHER APPS: messages from other Chat apps are never shown to you (loop prevention). If someone asks you to react to what another app said, say you cannot see it.',
+      reactions: 'none — a Chat app cannot react to messages, so never emit a [[REACT …]] marker here; answer in words or stay silent.',
+    },
+    async send(chatId, text, opts = {}) {
+      try {
+        const r = await (await dm()).postReply({ space: gchatSpaceOf(chatId), text, thread: opts.thread_ts ? threadName(chatId, opts.thread_ts) : null });
+        return { ok: r.ok, messageId: shortId(r.messageId) };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+    async sendFile(target, filePath) {
+      const f = confinedFile(filePath);
+      if (!f.ok) return f;
+      return { ok: false, error: `Google Chat apps cannot attach files — it is in the workspace at ${filePath}` };
+    },
+    async typing() { /* no typing indicator for Chat apps */ },
+    // What stands in for it: a short line under the message being answered,
+    // taken away when the turn ends.
+    async working(chatId, messageId, on) {
+      const key = `${chatId}|${messageId}`;
+      try {
+        const a = await api();
+        if (on) {
+          if (working.has(key)) return { ok: true };
+          const t = this.threadOfMessage(messageId);
+          const m = await a.createMessage({ space: gchatSpaceOf(chatId), text: (await dm()).WORKING_TEXT, thread: t ? threadName(chatId, t) : null });
+          if (m?.name) working.set(key, m.name);
+        } else {
+          const name = working.get(key);
+          working.delete(key);
+          if (name) await a.deleteMessage(name);
+        }
+        return { ok: true };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+    async react() { return { ok: false, error: 'Google Chat apps cannot react to messages' }; },
+    async download(ref) {
+      const r = typeof ref === 'object' && ref ? ref : { file_id: ref };
+      try {
+        const buffer = await (await api()).downloadAttachment(String(r.file_id || ''));
+        const ext = (String(r.name || '').match(/\.([A-Za-z0-9]{1,5})$/)?.[1] || (String(r.mime || '').split('/')[1] || 'bin')).toLowerCase();
+        return { ok: true, buffer, ext };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+    memberOf(fromId) { try { return userByGchatId(fromId); } catch { return null; } },
+    selfId() { let s = null; try { s = gchatSelf(); } catch { s = null; } return s; },
+    isSelf(fromId) { const s = this.selfId(); return !!s && String(fromId) === s; },
+    ensureSelf() { /* the listener learns it from the first @mention */ },
+    sendingReady() { try { return !!gchatStatus?.()?.connected; } catch { return false; } },
+    replyRef(target) {
+      const t = target && target.thread_id;
+      return t && this.threadOk(t) ? { thread_ts: String(t) } : {};
+    },
+    threads: true,
+    threadOk(t) { return /^[A-Za-z0-9_-]{4,64}$/.test(String(t || '')); },
+    threadOfMessage(messageId) { const t = String(messageId || '').split('.')[0]; return this.threadOk(t) ? t : null; },
+    async creatorOf() { return null; },   // a space is approved by an admin, never by its creator
+    async afterRegister() { /* the space side subscribes on approval */ },
+  };
+}
+
+// The Chat listener's status (connected, the app's own user id once known).
+let gchatStatus = null;
+export function __setGchatStatus(fn) { gchatStatus = fn; }
+function gchatSelf() { return gchatStatus ? gchatStatus()?.appUser || null : null; }
+
 // ─── registry ────────────────────────────────────────────────────────────────
 
-const adapters = { telegram: null, slack: null };
+const adapters = { telegram: null, slack: null, gchat: null };
 const overrides = {};
 
-/** The adapter for a group id (a Telegram chat id, `slack-C…`); Telegram when the id is not a group id at all (legacy callers). */
+/** The adapter for a group id (a Telegram chat id, `slack-C…`, `gchat-…`); Telegram when the id is not a group id at all (legacy callers). */
 export function adapterFor(chatId) {
   const kind = groupIdKind(chatId) || 'telegram';
   if (overrides[kind]) return overrides[kind];
-  if (!adapters[kind]) adapters[kind] = kind === 'slack' ? slackAdapter() : telegramAdapter();
+  if (!adapters[kind]) adapters[kind] = kind === 'slack' ? slackAdapter() : kind === 'gchat' ? gchatAdapter() : telegramAdapter();
   return adapters[kind];
 }
 

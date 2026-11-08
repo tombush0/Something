@@ -205,15 +205,27 @@ function pushHistory(chatId, entry) {
 // here so it survives restarts. The turn still runs with the SENDER's identity
 // per turn (attribution + outbound actions as them) — but in GROUP CONTEXT:
 // private trees are hard-blocked for everyone (see scope-rule.pathInGroupScope).
-// A session key is a group id, or `<group id>|<thread>` for a Slack thread:
+// A session key is a group id, or `<group id>|<thread>` for a thread (Slack,
+// Google Chat — the adapters with `threads`):
 // the channel itself is one conversation (a top-level message is answered in
 // the channel), and a thread someone opened keeps its own session; the
 // channel's history ring is the context for all of them.
+// What a platform does with threads: the adapter says (`threads`, `threadOk`,
+// `threadOfMessage`); a Slack adapter that does not is Slack's rules — a thread
+// is named by its parent's ts, a reply under a message opens the thread named
+// by the message's own ts.
+const SLACK_THREADS = { threads: true, threadOk: (t) => /^\d+\.\d+$/.test(String(t || '')), threadOfMessage: (id) => String(id || '') };
+function threading(a) {
+  if (a && a.threads !== undefined) return { threads: !!a.threads, threadOk: (t) => !!a.threadOk?.(t), threadOfMessage: (id) => a.threadOfMessage?.(id) ?? null };
+  return a?.kind === 'slack' ? SLACK_THREADS : { threads: false, threadOk: () => false, threadOfMessage: () => null };
+}
+
 function sessionKeyFor(chatId, target) {
-  if (!target || adapterFor(chatId).kind !== 'slack') return String(chatId);
+  const a = threading(adapterFor(chatId));
+  if (!target || !a.threads) return String(chatId);
   const t = target.thread_id;
   if (t && botThreads.has(`${chatId}|${t}`)) return String(chatId);   // a thread the bot opened is the channel's conversation
-  return t && /^\d+\.\d+$/.test(String(t)) ? `${chatId}|${t}` : String(chatId);
+  return t && a.threadOk(t) ? `${chatId}|${t}` : String(chatId);
 }
 
 // ─── Where a Slack reply goes ─────────────────────────────────────────────────
@@ -263,9 +275,12 @@ export function isLongReply(text) {
 export function placeReply(chatId, target, { text = '', hist = null } = {}) {
   const a = adapterFor(chatId);
   const base = a.replyRef(target);
-  if (a.kind !== 'slack' || base.thread_ts) return base;
-  const ts = String(target?.message_id || '');
-  if (!/^\d+\.\d+$/.test(ts)) return base;
+  const th = threading(a);
+  if (!th.threads || base.thread_ts) return base;
+  // The thread a reply under this message opens: Slack's is the message's own
+  // ts; Google Chat's is the thread the message already starts.
+  const ts = th.threadOfMessage(String(target?.message_id || ''));
+  if (!ts || !th.threadOk(ts)) return base;
   if (!channelBusy(hist || history.get(String(chatId)) || [], target) && !isLongReply(text)) return base;
   if (botThreads.size > 500) botThreads.delete(botThreads.keys().next().value);
   botThreads.set(`${chatId}|${ts}`, Date.now());
@@ -274,7 +289,7 @@ export function placeReply(chatId, target, { text = '', hist = null } = {}) {
 function sessionFile(key) {
   const [chatId, thread] = String(key).split('|');
   const gid = fileStem(chatId);
-  return join(AUDIT_DIR, `${gid}${thread ? `-thread-${thread.replace(/[^\d.]/g, '')}` : ''}-session.json`);
+  return join(AUDIT_DIR, `${gid}${thread ? `-thread-${thread.replace(/[^A-Za-z0-9_.-]/g, '')}` : ''}-session.json`);
 }
 function loadSession(chatId) {
   try {

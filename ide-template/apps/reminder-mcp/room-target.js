@@ -1,13 +1,16 @@
 /**
  * The room a reminder may be aimed at, as the group registry keys it: a
- * Telegram group's chat id (a negative number) or a Slack channel's
- * `slack-C…` — a bare `C…` as Slack shows it is taken too. Anything else is
+ * Telegram group's chat id (a negative number), a Slack channel's
+ * `slack-C…` — a bare `C…` as Slack shows it is taken too — or a Google Chat
+ * space's `gchat-…` (its `spaces/…` name is taken too). Anything else is
  * no room (the reminder then goes to a person). The registry, not this, is
  * what authorises the send when it fires.
  */
 export function roomTarget(value) {
   const v = String(value == null ? '' : value).trim();
   if (/^-?\d{4,20}$/.test(v)) return v;
+  const g = v.match(/^(?:gchat-|spaces\/)([A-Za-z0-9_-]{6,40})$/);
+  if (g) return `gchat-${g[1]}`;
   const m = v.match(/^(?:slack-)?([CG][A-Z0-9]{5,20})$/i);
   return m ? `slack-${m[1].toUpperCase()}` : null;
 }

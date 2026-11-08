@@ -13,7 +13,12 @@
  *   an @mention of the app in a space → onSpaceMessage
  *   the app added to / removed from a space → onAdded / onRemoved
  * Chat delivers only DMs and @mentions to an app; a space's other messages
- * need a Workspace Events subscription and arrive here the same way.
+ * come from a Workspace Events subscription on the space (gchat-spaces.js),
+ * published to the same topic as CloudEvents:
+ *   a message in a subscribed space   → onSpaceMessage (the @mention of the
+ *                                       same message, sent both ways, is seen once)
+ *   someone joined or left it          → onMembership (the audience check)
+ *   a subscription expiring or gone    → onSubscription (renew or make anew)
  *
  * Every pulled batch is acknowledged before it is handled (a turn takes
  * minutes; an unacknowledged message would come back) and every event is seen
@@ -32,6 +37,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as api from './gchat-api.js';
 import * as store from './store.js';
+import { __setGchatStatus } from './channel-adapter.js';
 
 const ID = api.ID;
 const BACKOFF_MIN_MS = 2000, BACKOFF_MAX_MS = 60_000;
@@ -49,6 +55,7 @@ function statePath() { return join(projectDir(), '.team', 'gchat-listener-state.
 const st = {
   running: false, generation: 0, connected: false, since: null, lastEventAt: null, lastPullAt: null,
   downSince: null, outages: [], counts: {}, app: null, subscription: null, error: null, abort: null,
+  appUser: null,   // the app's own users/<id>, learned from the first @mention of it
 };
 
 /** For the Integrations page: is the loop up, since when, what it saw. */
@@ -56,9 +63,10 @@ export function status() {
   return {
     running: st.running, connected: st.connected, since: st.since, lastEventAt: st.lastEventAt, lastPullAt: st.lastPullAt,
     outages: st.outages.slice(-OUTAGES_KEPT), counts: { ...st.counts },
-    app: st.app, subscription: st.subscription, error: st.error,
+    app: st.app, subscription: st.subscription, error: st.error, appUser: st.appUser,
   };
 }
+__setGchatStatus(status);   // the channel adapter learns the app's own id and whether it is connected
 
 let stateSavedAt = 0;
 function saveState(force = false) {
@@ -67,7 +75,7 @@ function saveState(force = false) {
   stateSavedAt = now;
   try {
     mkdirSync(join(projectDir(), '.team'), { recursive: true, mode: 0o770 });
-    writeFileSync(statePath(), JSON.stringify({ lastEventAt: st.lastEventAt, outages: st.outages.slice(-OUTAGES_KEPT) }), { mode: 0o660 });
+    writeFileSync(statePath(), JSON.stringify({ lastEventAt: st.lastEventAt, outages: st.outages.slice(-OUTAGES_KEPT), appUser: st.appUser }), { mode: 0o660 });
   } catch { /* best effort */ }
 }
 function loadState() {
@@ -75,6 +83,7 @@ function loadState() {
     const s = JSON.parse(readFileSync(statePath(), 'utf8'));
     if (s?.lastEventAt) st.lastEventAt = s.lastEventAt;
     if (Array.isArray(s?.outages)) st.outages = s.outages.slice(-OUTAGES_KEPT);
+    if (typeof s?.appUser === 'string' && /^users\/[\w-]+$/.test(s.appUser)) st.appUser = s.appUser;
   } catch { /* first run */ }
 }
 
@@ -97,7 +106,9 @@ function spaceOf(s) {
   return { name: s.name || null, type, displayName: s.displayName || null, singleUserBotDm: Boolean(s.singleUserBotDm) };
 }
 
-function messageOf(m) {
+const botMention = (a) => a?.type === 'USER_MENTION' && a.userMention?.user?.type === 'BOT';
+
+function messageOf(m, appUser = st.appUser) {
   if (!m || typeof m !== 'object') return null;
   const annotations = Array.isArray(m.annotations) ? m.annotations : [];
   return {
@@ -107,7 +118,8 @@ function messageOf(m) {
     thread: m.thread?.name || null,
     threadReply: Boolean(m.threadReply),
     createTime: m.createTime || null,
-    mentionsApp: annotations.some(a => a?.type === 'USER_MENTION' && a.userMention?.user?.type === 'BOT'),
+    // Mentions THIS app: by its id once known; until then any app mention counts.
+    mentionsApp: annotations.some(a => botMention(a) && (!appUser || a.userMention.user.name === appUser)),
     attachments: (Array.isArray(m.attachment) ? m.attachment : []).map(a => ({
       name: a.name || null,
       filename: a.contentName || null,
@@ -119,12 +131,63 @@ function messageOf(m) {
   };
 }
 
+const subjectSpace = (s) => (/^\/\/chat\.googleapis\.com\/(spaces\/[A-Za-z0-9_-]+)/.exec(String(s || '')) || [])[1] || null;
+
 /**
- * One event, in either shape, as { kind, eventTime, space, user, message }:
- * kind is 'message' | 'added' | 'removed' | 'other'.
+ * A Workspace Events CloudEvent (a space subscription's delivery) as one or
+ * more records: a message (in a batch, several), a membership change, or a
+ * subscription's own lifecycle. `attrs` are the Pub/Sub attributes (ce-*).
  */
-export function normalize(ev) {
-  if (!ev || typeof ev !== 'object') return null;
+function normalizeCloudEvent(data, attrs) {
+  const type = String(attrs['ce-type'] || '');
+  const time = attrs['ce-time'] || null;
+  const fromSubject = subjectSpace(attrs['ce-subject']);
+  if (/^google\.workspace\.chat\.message\.v1\.(batchC|c)reated$/.test(type)) {
+    const list = Array.isArray(data?.messages) ? data.messages.map(x => x?.message || x) : [data?.message];
+    return list.filter(Boolean).map((m) => ({
+      kind: 'message', eventTime: m.createTime || time, format: 'event',
+      user: userOf(m.sender),
+      space: spaceOf({ ...(m.space || {}), name: m.space?.name || fromSubject || String(m.name || '').split('/messages/')[0] || null }),
+      message: messageOf(m),
+    }));
+  }
+  if (/^google\.workspace\.chat\.membership\.v1\.(batch)?(created|deleted)$/i.test(type)) {
+    const created = /created$/i.test(type);
+    const list = Array.isArray(data?.memberships) ? data.memberships.map(x => x?.membership || x) : [data?.membership];
+    return list.filter(Boolean).map((mb) => ({
+      kind: 'membership', eventTime: time, format: 'event', change: created ? 'joined' : 'left',
+      user: userOf(mb.member), space: spaceOf({ name: String(mb.name || '').split('/members/')[0] || fromSubject }), message: null,
+    }));
+  }
+  if (/^google\.workspace\.events\.subscription\.v1\./.test(type)) {
+    const sub = data?.subscription || {};
+    const name = sub.name || (/subscriptions\/[\w-]+$/.exec(String(attrs['ce-source'] || '')) || [])[0] || null;
+    return [{
+      kind: 'subscription', eventTime: time, format: 'event', what: type.split('.').pop(),   // expirationReminder | expired | suspended
+      subscription: name, user: null, message: null,
+      space: spaceOf({ name: subjectSpace(sub.targetResource) || fromSubject }),
+    }];
+  }
+  return [{ kind: 'other', eventTime: time, format: 'event', user: null, space: spaceOf({ name: fromSubject }), message: null, ceType: type }];
+}
+
+/**
+ * One event, in any shape Chat sends, as { kind, eventTime, space, user, message }:
+ * kind is 'message' | 'added' | 'removed' | 'membership' | 'subscription' | 'other'.
+ * A Workspace Events delivery (its `ce-type` attribute) may hold several; the
+ * first is returned here and `normalizeAll` gives them all.
+ */
+export function normalize(ev, attrs = {}) {
+  return normalizeAll(ev, attrs)[0] || null;
+}
+
+export function normalizeAll(ev, attrs = {}) {
+  if (!ev || typeof ev !== 'object') return [];
+  if (attrs && attrs['ce-type']) return normalizeCloudEvent(ev, attrs);
+  return [normalizeInteraction(ev)].filter(Boolean);
+}
+
+function normalizeInteraction(ev) {
   if (ev.chat && typeof ev.chat === 'object') {
     const c = ev.chat;
     const p = c.messagePayload || c.addedToSpacePayload || c.removedFromSpacePayload || null;
@@ -150,9 +213,11 @@ function dedupe(key, now = Date.now()) {
  * returns what it did, as `{ did, ... }`, for the log and the tests.
  */
 export function createHandler(deps = {}) {
-  const d = { onDm: null, onSpaceMessage: null, onAdded: null, onRemoved: null, log: (s) => process.stderr.write(`[gchat] ${s}\n`), ...deps };
+  const d = { onDm: null, onSpaceMessage: null, onAdded: null, onRemoved: null, onMembership: null, onSubscription: null, log: (s) => process.stderr.write(`[gchat] ${s}\n`), ...deps };
   return async function handle(ev) {
+    if (ev?.kind === 'subscription') return d.onSubscription ? (await d.onSubscription(ev)) || { did: 'subscription' } : { did: 'unhandled', kind: ev.kind };
     if (!ev || !ev.space?.name) return { did: 'ignored', why: 'no space' };
+    if (ev.kind === 'membership') return d.onMembership ? (await d.onMembership(ev)) || { did: 'membership' } : { did: 'unhandled', kind: ev.kind };
     if (ev.kind === 'added') return d.onAdded ? (await d.onAdded(ev)) || { did: 'added' } : { did: 'unhandled', kind: ev.kind };
     if (ev.kind === 'removed') return d.onRemoved ? (await d.onRemoved(ev)) || { did: 'removed' } : { did: 'unhandled', kind: ev.kind };
     if (ev.kind !== 'message') return { did: 'ignored', why: `kind ${ev.kind}` };
@@ -179,16 +244,34 @@ export function setHandlers(h = {}) {
  * without a network. Never throws.
  */
 export async function dispatch(pulled, { handle = null, now = Date.now() } = {}) {
-  const ev = normalize(pulled?.event);
-  if (!ev) return { did: 'ignored', why: 'not an event' };
-  const key = ev.kind === 'message' && ev.message?.name ? `m:${ev.message.name}` : `${ev.kind}:${ev.space?.name}:${ev.eventTime}`;
-  if (!dedupe(pulled?.messageId ? `p:${pulled.messageId}` : null, now) || !dedupe(key, now)) return { did: 'duplicate' };
+  const all = normalizeAll(pulled?.event, pulled?.attributes || {});
+  if (!all.length) return { did: 'ignored', why: 'not an event' };
+  if (!dedupe(pulled?.messageId ? `p:${pulled.messageId}` : null, now)) return { did: 'duplicate' };
+  if (all.length === 1) { learnAppUser(all[0], pulled?.event); return dispatchOne(all[0], { handle, now }); }
+  const results = [];
+  for (const ev of all) results.push(await dispatchOne(ev, { handle, now }));
+  return { did: 'batch', results };
+}
+
+/** Learn the app's own Chat user from an @mention Chat delivered to it (the only mention that is surely of this app). */
+function learnAppUser(ev, raw) {
+  if (st.appUser || (ev.format !== 'add-on' && ev.format !== 'classic') || !raw) return;
+  const ann = (raw.chat?.messagePayload?.message || raw.message || {}).annotations || [];
+  const mentions = ann.filter(botMention).map(a => a.userMention.user.name).filter(Boolean);
+  if (ev.space?.type !== 'DIRECT_MESSAGE' && new Set(mentions).size === 1) { st.appUser = mentions[0]; saveState(true); }
+}
+
+async function dispatchOne(ev, { handle = null, now = Date.now(), raw = null } = {}) {
+  const key = ev.kind === 'message' && ev.message?.name ? `m:${ev.message.name}`
+    : ev.kind === 'subscription' ? `s:${ev.subscription}:${ev.what}:${ev.eventTime}`
+    : `${ev.kind}:${ev.space?.name}:${ev.user?.name || ''}:${ev.eventTime}`;
+  if (!dedupe(key, now)) return { did: 'duplicate' };
   st.counts[ev.kind] = (st.counts[ev.kind] || 0) + 1;
   st.lastEventAt = new Date(now).toISOString();
   saveState();
   try {
     const r = await (handle || handler || (handler = createHandler(handlerDeps)))(ev);
-    if (r?.did === 'unhandled') process.stderr.write(`[gchat] ${r.kind} event from ${ev.user?.email || ev.user?.name || '?'} in ${ev.space?.name}: no handler yet\n`);
+    if (r?.did === 'unhandled') process.stderr.write(`[gchat] ${r.kind} event${ev.user ? ` from ${ev.user.email || ev.user.name}` : ''} in ${ev.space?.name || '?'}: no handler\n`);
     return r;
   } catch (err) {
     process.stderr.write(`[gchat] event failed: ${err.message}\n`);
@@ -281,6 +364,6 @@ export function reconcile() {
 export function __reset() {
   stop('reset');
   seen.clear();
-  Object.assign(st, { connected: false, since: null, lastEventAt: null, lastPullAt: null, downSince: null, outages: [], counts: {}, app: null, subscription: null, error: null });
+  Object.assign(st, { connected: false, since: null, lastEventAt: null, lastPullAt: null, downSince: null, outages: [], counts: {}, app: null, subscription: null, error: null, appUser: null });
   handler = null; handlerDeps = {};
 }

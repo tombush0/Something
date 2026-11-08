@@ -997,14 +997,15 @@ export function isAllowedGroup(chatId) {
  */
 export function addGroup({ chatId, title, requireMention, beat, language, openAudience, privateAnswers, actor } = {}) {
   const id = normalizeGroupId(chatId);
-  if (!id) throw new Error('invalid group id (a Telegram chat id is a negative integer; a Slack channel is slack-C…)');
+  if (!id) throw new Error('invalid group id (a Telegram chat id is a negative integer; a Slack channel is slack-C…; a Google Chat space is gchat-…)');
   const cfg = readConfig();
   if (!cfg.groups || typeof cfg.groups !== 'object') cfg.groups = {};
   const prev = cfg.groups[id] && typeof cfg.groups[id] === 'object' ? cfg.groups[id] : {};
-  // An admin approves every Slack channel, so an approved one gets the
-  // whole of it: it joins in on its own and stays when an outsider is in the
-  // room (with the room's own memory only, then). Both can be turned off.
-  const slack = groupIdKind(id) === 'slack';
+  // An admin approves every Slack channel and Google Chat space, so an
+  // approved one gets the whole of it: it joins in on its own and stays when
+  // an outsider is in the room (with the room's own memory only, then). Both
+  // can be turned off.
+  const slack = groupIdKind(id) === 'slack' || groupIdKind(id) === 'gchat';
   cfg.groups[id] = {
     title:          title != null ? String(title).slice(0, 120) : (prev.title || ''),
     requireMention: requireMention != null ? !!requireMention : (prev.requireMention ?? false),
@@ -1152,8 +1153,8 @@ write_when: a group is registered/removed, or a new member is seen in a group. N
       body = groups.map(g => {
         const members = g.members && typeof g.members === 'object' ? Object.values(g.members) : [];
         const mlist = members.length ? members.join(', ') : '(no members seen yet)';
-        const where = g.kind === 'slack' ? 'Slack channel' : 'Telegram group';
-        const how = g.kind === 'slack' ? 'post here with group_send_message; a reminder or routine aimed here sets chat to this id' : 'post here with the Telegram reply tool; a reminder or routine aimed here sets chat to this id';
+        const where = g.kind === 'slack' ? 'Slack channel' : g.kind === 'gchat' ? 'Google Chat space' : 'Telegram group';
+        const how = g.kind === 'slack' || g.kind === 'gchat' ? 'post here with group_send_message; a reminder or routine aimed here sets chat to this id' : 'post here with the Telegram reply tool; a reminder or routine aimed here sets chat to this id';
         const state = g.paused ? ' — PAUSED: someone not on the team is in it, so I stay silent there' : (g.requireMention ? ' — answers only when addressed' : '');
         return `## ${g.title || 'Untitled group'} (${where})\n- id: \`${g.chatId}\` (${how})${state}\n- members seen: ${mlist}\n`;
       }).join('\n');

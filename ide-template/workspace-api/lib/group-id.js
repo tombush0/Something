@@ -5,20 +5,22 @@
  *
  * A Telegram group is its bare negative chat id (supergroups are -100…), kept
  * as is so nothing on disk moves. A surface added later namespaces its own
- * ids (`slack-C0123ABCD`), so one helper decides what is a group id and the
+ * ids (`slack-C0123ABCD`, `gchat-AAQAIgHH9zw`), so one helper decides what is a group id and the
  * file paths the id lands in stay safe — the same check used to live as six
  * copies of one regex.
  */
 
 const TELEGRAM_RE = /^-\d{4,20}$/;
 const SLACK_RE    = /^slack-[A-Z][A-Z0-9]{5,20}$/;   // a Slack conversation id (C…, G…) behind a fixed prefix
+const GCHAT_RE    = /^gchat-[A-Za-z0-9_-]{6,40}$/;   // a Google Chat space id (spaces/<id>) behind a fixed prefix
 
-/** 'telegram' | 'slack' for a group id, null for anything else. */
+/** 'telegram' | 'slack' | 'gchat' for a group id, null for anything else. */
 export function groupIdKind(v) {
   if (v == null) return null;
   const s = String(v).trim();
   if (TELEGRAM_RE.test(s)) return 'telegram';
   if (SLACK_RE.test(s)) return 'slack';
+  if (GCHAT_RE.test(s)) return 'gchat';
   return null;
 }
 

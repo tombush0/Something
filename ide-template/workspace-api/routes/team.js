@@ -30,6 +30,8 @@ import { writeAccessMap } from '../lib/integrations/runtime.js';
 import { listUnregistered } from '../lib/integrations/group-watcher.js';
 import * as slackChannels from '../lib/integrations/slack-channels.js';
 import { pendingUsers as slackPendingUsers, forgetPending as slackForgetPending } from '../lib/integrations/slack-listener.js';
+import * as gchatSpaces from '../lib/integrations/gchat-spaces.js';
+import { pendingUsers as gchatPendingUsers, forgetPending as gchatForgetPending } from '../lib/integrations/gchat-dm.js';
 
 // Rate limiter — see routes/integrations.js for the rationale (actor-keyed,
 // janitor sweeps stale buckets). Same shape, separate bucket count so a
@@ -253,9 +255,10 @@ export default function teamRouter() {
     res.json({ ok: true, groups: canEdit ? team.listGroups().filter(g => g.kind === 'telegram') : [], canEdit });
   });
 
-  // ─── Channels of every kind (today: Slack) ──────────────────────────────
+  // ─── Channels of every kind (Slack channels, Google Chat spaces) ─────────
   // The registered rooms, the rooms waiting for an admin's yes, and the people
-  // who wrote to the bot on Slack without being on the team. Admins only see
+  // who wrote to the bot on Slack or Google Chat without being on the team.
+  // Each pending entry says its surface (`kind`), for a page per surface. Admins only see
   // the pending lists; everyone sees that the surface exists.
   router.get('/team/channels', (req, res) => {
     if (!req.actor) return res.status(401).json({ error: 'Unauthorized.' });
@@ -265,12 +268,18 @@ export default function teamRouter() {
     res.set('Cache-Control', 'no-store');
     res.json({
       ok: true, canEdit, groups,
-      pending: canEdit ? slackChannels.pendingChannels() : [],
-      pendingPeople: canEdit ? slackPendingUsers() : [],
+      pending: canEdit ? [
+        ...slackChannels.pendingChannels().map(p => ({ kind: 'slack', ...p })),
+        ...gchatSpaces.pendingSpaces().map(p => ({ kind: 'gchat', ...p })),
+      ].filter(p => !kind || p.kind === kind) : [],
+      pendingPeople: canEdit ? [
+        ...slackPendingUsers().map(p => ({ kind: 'slack', ...p })),
+        ...gchatPendingUsers().map(p => ({ kind: 'gchat', ...p })),
+      ].filter(p => !kind || p.kind === kind) : [],
     });
   });
 
-  // Approve a room (a Slack channel the bot was added to), or change one.
+  // Approve a room (a Slack channel or a Google Chat space the bot was added to), or change one.
   router.post('/team/channels', requireAdmin, rateLimit, express.json({ limit: '2kb' }), async (req, res) => {
     const { chatId, title, beat, requireMention, language, openAudience, privateAnswers } = req.body || {};
     try {
@@ -280,6 +289,12 @@ export default function teamRouter() {
         if (privateAnswers != null && team.touchGroupMeta(id, { privateAnswers })) group = team.getGroup(id);
         // A room reopened to outsiders, or closed to them again, is rechecked at once.
         if (openAudience != null) await slackChannels.checkAudience(id, { quiet: true });
+        return res.status(201).json({ ok: true, group });
+      }
+      if (id.startsWith('gchat-')) {
+        let group = await gchatSpaces.approveSpace(id, { actor: req.actor, title, beat, requireMention, language, openAudience });
+        if (privateAnswers != null && team.touchGroupMeta(id, { privateAnswers })) group = team.getGroup(id);
+        if (openAudience != null) await gchatSpaces.checkAudience(id, { quiet: true });
         return res.status(201).json({ ok: true, group });
       }
       const group = team.addGroup({ chatId: id, title, beat, requireMention, language, privateAnswers, actor: req.actor });
@@ -299,6 +314,13 @@ export default function teamRouter() {
       await slackChannels.rejectChannel(id, 'removed by an admin');
       return res.json({ ok: true, removed: id });
     }
+    // A Google Chat space: forgotten and silent (an app cannot leave a space; the admins are told how to remove it).
+    if (id.startsWith('gchat-')) {
+      const known = !!team.getGroup(id) || gchatSpaces.pendingSpaces().some(p => p.chatId === id);
+      if (!known) return res.status(404).json({ error: 'not a known space' });
+      await gchatSpaces.rejectSpace(id, 'removed by an admin');
+      return res.json({ ok: true, removed: id });
+    }
     const removed = team.removeGroup(id, req.actor);
     if (!removed) return res.status(404).json({ error: 'group not allow-listed' });
     syncTelegramGroups().catch(() => {});
@@ -310,7 +332,7 @@ export default function teamRouter() {
     const id = String(req.params.chatId || '').trim();
     if (!team.getGroup(id)) return res.status(404).json({ error: 'not a registered channel' });
     try {
-      const audience = await slackChannels.checkAudience(id);
+      const audience = id.startsWith('gchat-') ? await gchatSpaces.checkAudience(id) : await slackChannels.checkAudience(id);
       res.json({ ok: true, audience, group: team.getGroup(id) });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
@@ -318,7 +340,10 @@ export default function teamRouter() {
   // A person who wrote on Slack without being on the team: forget the request
   // (adding them is POST /api/team with their email, as for anyone).
   router.delete('/team/channels/pending-people/:id', requireAdmin, rateLimit, (req, res) => {
-    slackForgetPending(String(req.params.id || ''));
+    const pid = String(req.params.id || '');
+    // A Google Chat person is users/<id> (the slash arrives encoded, or as users-<id>).
+    if (/^users[/-]\d+$/.test(pid)) gchatForgetPending(pid.replace(/^users-/, 'users/'));
+    else slackForgetPending(pid);
     res.json({ ok: true });
   });
 

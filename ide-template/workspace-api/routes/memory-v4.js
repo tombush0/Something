@@ -376,7 +376,7 @@ export default function memoryV4Router() {
         scope: where, source: r.source, review: r.source === 'review',
         // Where it was said — web, Telegram or Slack — for the glyph beside the fact; a
         // room's by the room's kind; a note saved mid-turn or an import carries none.
-        via: ['web', 'telegram', 'slack', 'gchat'].includes(r.source) ? r.source : r.source === 'group' ? (groupIdKind(String(r.conv || '').replace(/^group:/, '')) === 'slack' ? 'slack' : 'telegram') : null,
+        via: ['web', 'telegram', 'slack', 'gchat'].includes(r.source) ? r.source : r.source === 'group' ? ({ slack: 'slack', gchat: 'gchat' }[groupIdKind(String(r.conv || '').replace(/^group:/, ''))] || 'telegram') : null,
         // A fact an integration stands behind — its own record, or one of its
         // sources (a chat-made "call with X" confirmed by the meeting's import)
         // — wears the service's icon after its title.
