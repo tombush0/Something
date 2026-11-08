@@ -77,7 +77,7 @@ const standIn = async ({ system, user, schema }) => {
 
 // ─── what can feed memory ────────────────────────────────────────────────────
 const feeders = S.feeders().map(e => e.id);
-ok('the six notetakers are memory sources, on by default', ['granola', 'fireflies', 'fathom', 'otter', 'readai', 'krisp'].every(id => feeders.includes(id)) && S.feeders().every(e => e.memory.kind === 'meetings' && e.memory.default === true), feeders);
+ok('the seven notetakers are memory sources, on by default', ['granola', 'fireflies', 'fathom', 'otter', 'readai', 'krisp', 'pocket'].every(id => feeders.includes(id)) && S.feeders().every(e => e.memory.kind === 'meetings' && e.memory.default === true), feeders);
 ok('nothing else is', !feeders.some(id => ['shopify', 'email-imap', 'notion', 'google-workspace'].includes(id)), feeders);
 let list = S.listFor('ola');
 ok('a person sees their connected sources only — Granola, on by default', list.length === 1 && list[0].id === 'granola' && list[0].on === true && list[0].lastRun === null, list);

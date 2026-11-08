@@ -2184,6 +2184,35 @@
       }
     },
     {
+      "id": "pocket",
+      "label": "Pocket",
+      "logo": "/integrations/pocket.svg",
+      "description": "Your Pocket recordings, calls and transcripts: search everything that was said, read a conversation and its summary, and keep its action items up to date.",
+      "category": "meetings",
+      "kind": "notetaker",
+      "fields": [
+        {
+          "name": "OAUTH_TOKENS",
+          "label": "Pocket connection",
+          "type": "remote-mcp-oauth"
+        }
+      ],
+      "mcp": {
+        "type": "http",
+        "url": "https://public.heypocketai.com/mcp",
+        "name": "pocket",
+        "allowedHosts": [
+          "public.heypocketai.com"
+        ]
+      },
+      "tagline": "Recordings, transcripts",
+      "memory": {
+        "kind": "meetings",
+        "default": true,
+        "what": "your recordings' transcripts and notes, each night"
+      }
+    },
+    {
       "id": "elevenlabs",
       "label": "ElevenLabs",
       "logo": "/integrations/elevenlabs.svg",

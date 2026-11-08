@@ -17,7 +17,7 @@ approve, and you are back. A few ask for an API key the service gives you;
 paste it and you are done. Either way, nothing to install, nothing to restart.
 The key is stored encrypted on your own server and never leaves it.
 
-A meeting notetaker (Granola, Fireflies, Fathom, Otter, Read AI, Krisp) also
+A meeting notetaker (Granola, Fireflies, Fathom, Otter, Read AI, Krisp, Pocket) also
 feeds the coworker's memory: each night it reads the day's meetings, notes and
 transcripts, and remembers what was said the way it remembers a conversation.
 The switch for that sits on the service's card and under Memory → Sources.
@@ -133,6 +133,7 @@ it works. `open` = no auth at all (keyless hosted server, instant-activate).
 | **Krisp** | Meeting notes, transcripts and action items (read-only) | OAuth |
 | **Linear** | Issues, projects, cycles | OAuth |
 | **Mailchimp** | Audiences and campaigns | OAuth |
+| **Pocket** | Recordings, call transcripts, summaries and action items (action items writable) | OAuth |
 | **Miro** | Boards and diagrams | OAuth |
 | **monday.com** | Boards, items, updates | OAuth |
 | **Neon** | Postgres branches and SQL | OAuth |

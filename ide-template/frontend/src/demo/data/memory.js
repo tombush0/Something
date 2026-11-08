@@ -67,6 +67,7 @@ const MEETING_SOURCES = {
   otter:     { id: 'otter',     label: 'Otter.ai',  logo: '/integrations/otter.svg' },
   readai:    { id: 'readai',    label: 'Read AI',   logo: '/integrations/readai.svg' },
   krisp:     { id: 'krisp',     label: 'Krisp',     logo: '/integrations/krisp.svg' },
+  pocket:    { id: 'pocket',    label: 'Pocket',    logo: '/integrations/pocket.svg' },
 };
 const MEETING_WHAT = "your meetings' notes and transcripts, each night";
 
