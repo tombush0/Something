@@ -1883,6 +1883,98 @@
       "tagline": "Spaces, DMs, messages"
     },
     {
+      "id": "gmail",
+      "label": "Gmail",
+      "logo": "/integrations/gmail.svg",
+      "description": "Gmail through Google's own API: search with Gmail's search, read threads, draft and send with your Gmail signature, reply all, forward, labels and archive.",
+      "category": "messaging",
+      "fields": [
+        {
+          "name": "GMAIL_CLIENT_ID",
+          "label": "OAuth Client ID",
+          "type": "secret",
+          "placeholder": "...apps.googleusercontent.com",
+          "helper": "From your own Google Cloud OAuth client (Web application type)."
+        },
+        {
+          "name": "GMAIL_CLIENT_SECRET",
+          "label": "OAuth Client Secret",
+          "type": "secret",
+          "placeholder": "GOCSPX-...",
+          "helper": "Same OAuth client. Pair with the Client ID above."
+        },
+        {
+          "name": "GMAIL_REFRESH_TOKEN",
+          "label": "Refresh token",
+          "type": "secret",
+          "placeholder": "1//0...",
+          "helper": "Generate via OAuth Playground (instructions in step 3)."
+        },
+        {
+          "name": "GMAIL_ALLOW_SEND",
+          "label": "Sending email",
+          "type": "select",
+          "default": "no",
+          "options": [
+            {
+              "value": "no",
+              "label": "Drafts only"
+            },
+            {
+              "value": "yes",
+              "label": "Send too"
+            }
+          ],
+          "helper": "Drafts only: it writes drafts in your Gmail, you send them."
+        }
+      ],
+      "steps": [
+        {
+          "title": "Enable the Gmail API",
+          "body": "[console.cloud.google.com](https://console.cloud.google.com), the project you use for Google Workspace → **APIs & Services** → **Library** → enable **Gmail API**."
+        },
+        {
+          "title": "Create an OAuth client",
+          "body": "Same project → **APIs & Services** → **Credentials** → **Create OAuth client ID** → **Web application**, redirect URI `https://developers.google.com/oauthplayground`. Copy the **Client ID** and **Client Secret**."
+        },
+        {
+          "title": "Generate the refresh token",
+          "body": "Open [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground) → **⚙** → **Use your own OAuth credentials** → paste the Client ID and Secret. In **Step 1** paste these scopes:\n\n```\nhttps://www.googleapis.com/auth/gmail.modify\nhttps://www.googleapis.com/auth/gmail.settings.basic\n```\n\nThe first reads, labels, drafts and sends mail; the second reads your Gmail signature. **Authorize APIs** → sign in with the mailbox the bot should use → **Allow** → **Exchange authorization code for tokens** → copy the `refresh_token`.\n\nIf this mailbox is also connected under **Email (IMAP)**, remove it there, so the bot has one way to reach it."
+        }
+      ],
+      "mcp": {
+        "command": "node",
+        "args": [
+          "{appsDir}/gmail-mcp/index.js"
+        ],
+        "envMap": {
+          "GMAIL_CLIENT_ID": "GMAIL_CLIENT_ID",
+          "GMAIL_CLIENT_SECRET": "GMAIL_CLIENT_SECRET",
+          "GMAIL_REFRESH_TOKEN": "GMAIL_REFRESH_TOKEN",
+          "GMAIL_ALLOW_SEND": "GMAIL_ALLOW_SEND"
+        },
+        "name": "gmail",
+        "allowedHosts": [
+          "gmail.googleapis.com",
+          "oauth2.googleapis.com"
+        ]
+      },
+      "writeTools": [
+        "modify_labels",
+        "archive",
+        "mark_read",
+        "mark_unread",
+        "trash",
+        "create_draft",
+        "delete_draft",
+        "send_email",
+        "reply",
+        "forward",
+        "send_draft"
+      ],
+      "tagline": "Search, drafts, send, labels"
+    },
+    {
       "id": "docs-comments",
       "label": "Docs Comments",
       "logo": "/integrations/docs-comments.svg",
@@ -2258,6 +2350,35 @@
         "kind": "meetings",
         "default": true,
         "what": "your meetings' notes and transcripts, each night"
+      }
+    },
+    {
+      "id": "pocket",
+      "label": "Pocket",
+      "logo": "/integrations/pocket.svg",
+      "description": "Your Pocket recordings, calls and transcripts: search everything that was said, read a conversation and its summary, and keep its action items up to date.",
+      "category": "meetings",
+      "kind": "notetaker",
+      "fields": [
+        {
+          "name": "OAUTH_TOKENS",
+          "label": "Pocket connection",
+          "type": "remote-mcp-oauth"
+        }
+      ],
+      "mcp": {
+        "type": "http",
+        "url": "https://public.heypocketai.com/mcp",
+        "name": "pocket",
+        "allowedHosts": [
+          "public.heypocketai.com"
+        ]
+      },
+      "tagline": "Recordings, transcripts",
+      "memory": {
+        "kind": "meetings",
+        "default": true,
+        "what": "your recordings' transcripts and notes, each night"
       }
     },
     {

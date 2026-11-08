@@ -418,8 +418,9 @@ export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', mess
   // process's memory, so after a restart of workspace-api the file still
   // names the previous process's and every brokered MCP would fail to load
   // its credentials and register no tools (seen 2026-06-03 as "only 5 MCPs").
-  // The pass keeps a grant that is still good and rewrites the file only when
-  // something changed, so for most turns it is a read. It runs BEFORE this
+  // The pass keeps a grant with half its lifetime left (broker.js grantToKeep)
+  // and rewrites the file only when something changed, so for most turns it
+  // is a read. It runs BEFORE this
   // turn's own config is written from that file: a turn whose file was copied
   // first carried the nonces of the day before, expired by the time its MCPs
   // claimed them, and every brokered server failed for that one turn
@@ -446,6 +447,7 @@ export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', mess
   const NO_BUILTINS = ['Bash', 'BashOutput', 'KillShell', 'Monitor', 'Agent', 'Task', 'Workflow', 'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Glob', 'Grep', 'LS',
     'WebFetch', 'WebSearch', 'Skill', 'TaskStop', 'TaskOutput', 'TodoWrite', 'ToolSearch', 'CronCreate', 'CronDelete', 'CronList', 'ScheduleWakeup',
     'EnterWorktree', 'ExitWorktree', 'EnterPlanMode', 'ExitPlanMode', 'SendMessage', 'ListAgents', 'RemoteTrigger', 'PushNotification', 'Artifact'];
+
   if (pageTurn) {
     const entry = turnMcpServers({ actor, groupContext })['workspace-api'];
     mcpServers = entry ? { 'workspace-api': entry } : {};
@@ -569,6 +571,7 @@ export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', mess
   if (systemParts.length) args.push('--append-system-prompt', systemParts.join('\n\n'));
 
   if (sessionId) args.push('--resume', sessionId);
+
 
   // Inject the stored OAuth token if it exists and isn't already in env.
   // This covers the self-service wizard path: token saved via /api/setup/token,

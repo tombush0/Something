@@ -146,6 +146,20 @@ export function grantIntegration(nonce, minLeftMs = 0) {
 }
 
 /**
+ * The integration of a grant worth handing to a new process: live AND with
+ * at least half its lifetime left. A config sync keeps such a nonce and
+ * mints a new one otherwise — so a process started from the config (a chat
+ * turn, the bot) never holds a grant about to expire, and an MCP it starts
+ * or restarts hours later still gets its credentials. The replaced grant
+ * stays valid until it expires, for the processes already holding it.
+ */
+export function grantToKeep(nonce) {
+  const grant = typeof nonce === 'string' ? grants.get(nonce) : null;
+  if (!grant || grant.expiresAt - Date.now() < NONCE_TTL_MS / 2) return null;
+  return grant.integrationId;
+}
+
+/**
  * Resolve a nonce + claimed integrationId to the live grant. Returns
  * null on miss / mismatch / expiry. Does NOT consume the grant — see
  * the rationale in the grants map comment above.

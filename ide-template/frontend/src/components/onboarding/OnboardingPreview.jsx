@@ -554,6 +554,7 @@ const MEMBER_PLAN = {
         { id: 'otter', label: 'Otter', logo: '/integrations/otter.svg' },
         { id: 'readai', label: 'Read AI', logo: '/integrations/readai.svg' },
         { id: 'krisp', label: 'Krisp', logo: '/integrations/krisp.svg' },
+        { id: 'pocket', label: 'Pocket', logo: '/integrations/pocket.svg' },
       ] },
   ],
   routines: [

@@ -69,7 +69,7 @@ that it is not saved, never that it is.
   brings in goes to the owner's memory only — never into a teammate's. A voice note you
   record in your notetaker (on the phone, for yourself) becomes a fact titled
   "Voice note: …" with the note's own title, in your words. A meeting notetaker
-  you have connected (Granola, Fireflies, Fathom, Otter, Read AI, Krisp) is
+  you have connected (Granola, Fireflies, Fathom, Otter, Read AI, Krisp, Pocket) is
   read in each night: its notes and transcripts become facts of yours, each
   with the meeting behind "See source" and the service's icon after its title.
   A switch per source, here and on the integration's card; "Read now" reads
@@ -331,7 +331,7 @@ itself as an MCP client (`lib/integrations/mcp-client.js` — the person's
 OAuth token from the store, the egress proxy's open listener, one connection
 per run) through the service's feeder (`lib/memory-feeders/`: list the items
 since a time, get one item's notes and transcript — Granola's reader checked
-against its live server; Fireflies, Fathom, Otter, Read AI and Krisp read by
+against its live server; Fireflies, Fathom, Otter, Read AI, Krisp and Pocket read by
 `generic.js`, which takes the tool names each service publishes and fills
 the arguments from the schema the server itself declares; Fathom's tools
 were checked live)

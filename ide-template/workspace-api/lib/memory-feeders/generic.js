@@ -29,12 +29,12 @@ export function json(text) {
 }
 
 const ID = ['id', 'transcriptId', 'transcript_id', 'meeting_id', 'meetingId', 'recording_id', 'recordingId', 'conversation_id', 'conversationId', 'otid', 'speech_id', 'ulid', 'document_id', 'documentId', 'uuid'];
-const TITLE = ['title', 'meeting_title', 'meetingTitle', 'name', 'subject', 'topic'];
-const WHEN = ['start_time', 'startTime', 'started_at', 'startedAt', 'scheduled_start_time', 'recording_start_time', 'meeting_start_time', 'start', 'date', 'dateString', 'datetime', 'created_at', 'createdAt'];
+const TITLE = ['title', 'recordingTitle', 'meeting_title', 'meetingTitle', 'name', 'subject', 'topic'];
+const WHEN = ['start_time', 'startTime', 'started_at', 'startedAt', 'scheduled_start_time', 'recording_start_time', 'meeting_start_time', 'start', 'date', 'dateString', 'datetime', 'created_at', 'createdAt', 'recordingDate'];
 const PEOPLE = ['participants', 'attendees', 'calendar_invitees', 'invitees', 'speakers', 'meeting_attendees'];
 const SUMMARY = ['summary', 'default_summary', 'overview', 'short_summary', 'notes', 'meeting_notes', 'recap', 'key_points', 'keyPoints'];
 const ACTIONS = ['action_items', 'actionItems', 'action_items_list', 'tasks'];
-const TRANSCRIPT = ['transcript', 'sentences', 'transcript_text', 'segments', 'utterances', 'speeches'];
+const TRANSCRIPT = ['transcript', 'transcriptSegments', 'sentences', 'transcript_text', 'segments', 'utterances', 'speeches'];
 const URL = ['url', 'transcript_url', 'share_url', 'report_url', 'meeting_url', 'link', 'web_url'];
 
 const pick = (o, keys) => { for (const k of keys) if (o && o[k] != null && o[k] !== '') return o[k]; return null; };
@@ -96,8 +96,8 @@ export function meeting(o) {
 // ─── arguments, from the tool's own schema ───────────────────────────────────
 
 const ARG = {
-  since: ['fromDate', 'from_date', 'from', 'start_date', 'startDate', 'date_from', 'dateFrom', 'created_after', 'createdAfter', 'after', 'since', 'start_time_from', 'start_time_gte', 'started_after', 'min_date', 'start'],
-  until: ['toDate', 'to_date', 'to', 'end_date', 'endDate', 'date_to', 'dateTo', 'created_before', 'createdBefore', 'before', 'until', 'start_time_to', 'start_time_lte', 'started_before', 'max_date', 'end'],
+  since: ['fromDate', 'from_date', 'from', 'start_date', 'startDate', 'date_from', 'dateFrom', 'created_after', 'createdAfter', 'after', 'since', 'start_time_from', 'start_time_gte', 'started_after', 'min_date', 'start', 'recordingDateAfter'],
+  until: ['toDate', 'to_date', 'to', 'end_date', 'endDate', 'date_to', 'dateTo', 'created_before', 'createdBefore', 'before', 'until', 'start_time_to', 'start_time_lte', 'started_before', 'max_date', 'end', 'recordingDateBefore'],
   id: ['transcriptId', 'transcript_id', 'meeting_id', 'meetingId', 'recording_id', 'recordingId', 'conversation_id', 'conversationId', 'otid', 'speech_id', 'document_id', 'documentId', 'id'],
   ids: ['ids', 'meeting_ids', 'meetingIds', 'document_ids', 'documentIds', 'recording_ids'],
   limit: ['limit', 'page_size', 'pageSize', 'max_results', 'maxResults', 'count', 'n'],
@@ -184,7 +184,7 @@ export function makeFeeder(cfg) {
   };
 }
 
-// ─── the five services (tool names as their docs publish them) ───────────────
+// ─── the services (tool names as their docs publish them) ────────────────────
 
 export const fireflies = makeFeeder({ id: 'fireflies', list: ['fireflies_get_transcripts'], get: ['fireflies_fetch'], summary: ['fireflies_get_summary'], transcript: ['fireflies_get_transcript'] });
 /**
@@ -206,3 +206,41 @@ export const fathom = makeFeeder({ id: 'fathom', list: ['list_meetings'], get: [
 export const otter = makeFeeder({ id: 'otter', list: ['list_meetings', 'list_conversations'], get: ['get_meeting', 'get_conversation'], summary: ['get_meeting_summary', 'get_summary'], transcript: ['get_transcript'] });
 export const readai = makeFeeder({ id: 'readai', list: ['list_meetings'], get: ['get_meeting_by_id', 'get_meeting'], summary: ['get_meeting_summary'], transcript: ['get_meeting_transcript', 'get_transcript'] });
 export const krisp = makeFeeder({ id: 'krisp', list: ['search_meetings', 'list_meetings'], get: ['get_multiple_documents', 'get_document', 'get_meeting'], summary: [], transcript: [] });
+
+/**
+ * Pocket (docs.heypocketai.com/docs/mcp, 2026-11-07). Its list is
+ * search_pocket_conversations without a query ("recency mode"): the newest
+ * recordings in the date range, each with its full transcript, on every plan.
+ * get_pocket_conversation adds the summary (Notes) but is Pro only, so on a
+ * free plan get falls back to what the list already returned. A recording not
+ * transcribed yet (transcriptAvailable: false) is left for a later night: the
+ * window overlaps a day, so it comes back once it has words.
+ */
+const pocketBase = makeFeeder({ id: 'pocket', list: [], get: ['get_pocket_conversation'], summary: [], transcript: [] });
+const pocketSeen = new Map();   // id → the meeting as the list gave it, for the free-plan get
+export const pocket = {
+  id: 'pocket',
+  async list(client, { since, until }) {
+    const tool = ((await client.listTools())?.tools || []).find(t => t.name === 'search_pocket_conversations');
+    if (!tool) throw new Error('pocket: search_pocket_conversations not offered');
+    const r = await client.callTool({ name: tool.name, arguments: argsFor(tool, { since, until, limit: 50 }) });
+    if (r?.isError) throw new Error(`${tool.name}: ${textOf(r).slice(0, 200)}`);
+    const text = textOf(r);
+    const found = items(json(text));
+    if (!found.length && String(text).trim() && !json(text)) throw new Error('pocket: the list is not in a shape this reader knows');
+    const lo = Date.parse(since) - 86400_000, hi = Date.parse(until);
+    const got = found.filter(o => o.transcriptAvailable !== false).map(meeting)
+      .filter(m => m.id && (!m.at || (Date.parse(m.at) >= lo && Date.parse(m.at) <= hi)));
+    if (pocketSeen.size > 500) pocketSeen.clear();
+    for (const m of got) pocketSeen.set(m.id, m);
+    return got;
+  },
+  async get(client, id) {
+    try { return await pocketBase.get(client, id); }
+    catch (e) {
+      const m = pocketSeen.get(id);
+      if (m && (m.transcript || m.summary)) return m;
+      throw e;
+    }
+  },
+};

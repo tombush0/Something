@@ -25,7 +25,7 @@ import { dirname, join } from 'node:path';
 import * as catalog from './catalog.js';
 import * as store from './store.js';
 import { primaryAdminSlug, getTeamMode } from '../team.js';
-import { issueGrant, grantIntegration } from './broker.js';
+import { issueGrant, grantToKeep } from './broker.js';
 
 // Phase-2 broker isolation. MCPs no longer get plaintext credentials in
 // their spawn env — they get a nonce + integration id, and fetch the
@@ -135,14 +135,9 @@ function writeClaudeConfig(cfg) {
  * (`granola-mine`: "your own Granola"), so a person whose workspace also has
  * the integration sees both, told apart by name; its broker grant and bridge
  * id carry the key, so the credentials served are that person's alone.
- * `existing` lets a still-valid broker nonce be reused instead of reminted.
+ * `existing` lets a broker nonce with half its lifetime left be reused
+ * instead of reminted (broker.js grantToKeep).
  */
-// A nonce already in a config is kept only while it has this long to run.
-// Grants live 24 h; a config written with one minutes from expiry hands its
-// MCPs a nonce the broker rejects by the time they start (the first turn after
-// the 24 h mark lost every brokered server, 2026-11-04), so the pass re-mints
-// well ahead instead of on the edge.
-const NONCE_REUSE_MIN_MS = 60 * 60 * 1000;
 function serverEntriesFor(key, existing = {}) {
   const out = {};
   const cat = catalog.get(key);
@@ -151,7 +146,7 @@ function serverEntriesFor(key, existing = {}) {
   const nameOf = (n) => (personal ? `${n}-mine` : n);
   const nonceFor = (name) => {
     const n = existing[name]?.env?.BROKER_NONCE;
-    return grantIntegration(n, NONCE_REUSE_MIN_MS) === key ? n : issueGrant(key);
+    return grantToKeep(n) === key ? n : issueGrant(key);
   };
   if (cat.mcp.type === 'http') {
     const { name, url } = cat.mcp;
@@ -261,7 +256,7 @@ export function personalServers(slug) {
   const keys = store.personalIds(slug);
   const sig = keys.join('|');
   const hit = personalCache.get(slug);
-  if (hit && hit.keys === sig && Object.values(hit.servers).every(e => !e.env?.BROKER_NONCE || grantIntegration(e.env.BROKER_NONCE, NONCE_REUSE_MIN_MS))) return hit.servers;
+  if (hit && hit.keys === sig && Object.values(hit.servers).every(e => !e.env?.BROKER_NONCE || grantToKeep(e.env.BROKER_NONCE))) return hit.servers;
   let servers = {};
   for (const key of keys) servers = { ...servers, ...serverEntriesFor(key, hit?.servers || {}) };
   personalCache.set(slug, { keys: sig, servers });

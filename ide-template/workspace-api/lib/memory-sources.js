@@ -41,7 +41,7 @@ import { list as rosterList, primaryAdminSlug, getTeamMode, effectiveTimezone, g
 import { localClock } from './memory-maintenance.js';
 import { withRemote } from './integrations/mcp-client.js';
 import granola from './memory-feeders/granola.js';
-import { fireflies, fathom, otter, readai, krisp } from './memory-feeders/generic.js';
+import { fireflies, fathom, otter, readai, krisp, pocket } from './memory-feeders/generic.js';
 
 /**
  * The services workspace-api reads itself. Granola's reader was checked
@@ -50,7 +50,7 @@ import { fireflies, fathom, otter, readai, krisp } from './memory-feeders/generi
  * answer they cannot read is read through a turn that night instead (notes
  * only), so a night is never lost to a changed API.
  */
-export const FEEDERS = { granola, fireflies, fathom, otter, readai, krisp };
+export const FEEDERS = { granola, fireflies, fathom, otter, readai, krisp, pocket };
 
 export const RUN_HOUR = Number(process.env.MEMORY_IMPORT_HOUR) || 2;   // at night, in the person's own zone — before the 04:00 tidy-up
 const FIRST_DAYS = 2;               // a freshly switched-on source: the last two days, never its history
