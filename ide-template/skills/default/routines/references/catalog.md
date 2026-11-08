@@ -89,7 +89,7 @@ The summary is what to say to the person; the full instruction is what the plann
   Each morning: today's meetings, free blocks and what to prepare.
 - **Meeting prep** — `meeting-prep` · recommended · needs: Google Workspace or Cal.com or Calendly
   Before meetings with outside people: a short brief on who, the last thread and open items.
-- **After the meeting** — `meeting-followup` · needs: Google Workspace or Granola or Fireflies or Fathom or Otter.ai or Read AI or Krisp
+- **After the meeting** — `meeting-followup` · needs: Google Workspace or Granola or Fireflies or Fathom or Otter.ai or Read AI or Krisp or Pocket
   Turns meeting notes into proposed tasks and a follow-up draft.
 - **Tomorrow, checked** — `calendar-conflicts` · needs: Google Workspace or Cal.com or Calendly
   Each evening: clashes, no breaks or an overloaded tomorrow, with a fix.
@@ -97,7 +97,7 @@ The summary is what to say to the person; the full instruction is what the plann
   Once a day: invites you haven't answered, soonest first.
 - **New bookings** — `new-bookings` · needs: Cal.com or Calendly
   Tells you when someone books, moves or cancels time with you.
-- **Action items from meetings** — `meeting-actions` · needs: Granola or Fireflies or Fathom or Otter.ai or Read AI or Krisp
+- **Action items from meetings** — `meeting-actions` · needs: Granola or Fireflies or Fathom or Otter.ai or Read AI or Krisp or Pocket
   After each meeting: who does what by when, ready to put on the board.
 
 ## Sales & clients

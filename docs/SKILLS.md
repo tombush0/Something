@@ -173,7 +173,7 @@ ide-template/skills/
     │                                            mailchimp, wix, webflow, github, sentry, supabase, neon, netlify, vercel,
     │                                            cloudflare, amplitude, ga4, zapier, deepl, elevenlabs,
     │                                            parallel, firecrawl, cryptocom, fireflies, fathom, otter,
-    │                                            readai, krisp — tools, write rules, gotchas, routines
+    │                                            readai, krisp, pocket — tools, write rules, gotchas, routines
     └── trello/
 ```
 

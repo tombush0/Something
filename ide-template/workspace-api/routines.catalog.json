@@ -77,7 +77,7 @@
       "id": "promise-keeper",
       "title": "Keep my promises",
       "summary": "When you say you'll do something later, it comes back at the right moment.",
-      "description": "Once a day, read today's recent_messages (and mail I sent today, if a mailbox is connected). When I promised something for later (\"I'll send it tomorrow\", \"let's revisit Friday\"), set yourself a reminder for that moment (set_reminder) and note it. When it fires, check whether it happened (the board, sent mail, our conversation); bring it back only if it hasn't. If a notetaker (Granola, Fireflies, Fathom, Otter, Read AI or Krisp) is connected, also take the commitments they made in meetings from its notes, once a day.",
+      "description": "Once a day, read today's recent_messages (and mail I sent today, if a mailbox is connected). When I promised something for later (\"I'll send it tomorrow\", \"let's revisit Friday\"), set yourself a reminder for that moment (set_reminder) and note it. When it fires, check whether it happened (the board, sent mail, our conversation); bring it back only if it hasn't. If a notetaker (Granola, Fireflies, Fathom, Otter, Read AI, Krisp or Pocket) is connected, also take the commitments they made in meetings from its notes, once a day.",
       "icon": "followup",
       "category": "planning",
       "tags": [
@@ -395,7 +395,7 @@
       "id": "meeting-prep",
       "title": "Meeting prep",
       "summary": "Before meetings with outside people: a short brief on who, the last thread and open items.",
-      "description": "Each morning, find today's meetings in the calendar (Google Calendar list_events/get_event, or Cal.com/Calendly bookings — whichever is connected) with an attendee from outside my email domain, and set yourself a reminder about 30 minutes before each (set_reminder). Then prepare a short brief: who they are (memory_search), the last mail thread with them if a mailbox is connected, related tasks and files, open items. If a notetaker (Granola, Fireflies, Fathom, Otter, Read AI or Krisp) is connected, also read the notes from your last meeting with them (its tools) and carry over what was left open.",
+      "description": "Each morning, find today's meetings in the calendar (Google Calendar list_events/get_event, or Cal.com/Calendly bookings — whichever is connected) with an attendee from outside my email domain, and set yourself a reminder about 30 minutes before each (set_reminder). Then prepare a short brief: who they are (memory_search), the last mail thread with them if a mailbox is connected, related tasks and files, open items. If a notetaker (Granola, Fireflies, Fathom, Otter, Read AI, Krisp or Pocket) is connected, also read the notes from your last meeting with them (its tools) and carry over what was left open.",
       "icon": "meeting",
       "category": "calendar",
       "tags": [
@@ -413,7 +413,7 @@
       "id": "meeting-followup",
       "title": "After the meeting",
       "summary": "Turns meeting notes into proposed tasks and a follow-up draft.",
-      "description": "Once a day, for yesterday's meetings in Google Calendar that have notes (a linked Google Doc or a workspace file named after the meeting). Pull out decisions and action items; propose the actions as tasks (add them to the board only after I say yes) and write the follow-up mail — create_draft if a mailbox is connected, otherwise in the chat. With a notetaker (Granola, Fireflies, Fathom, Otter, Read AI or Krisp) connected, read the meeting's notes and transcript from its tools instead.",
+      "description": "Once a day, for yesterday's meetings in Google Calendar that have notes (a linked Google Doc or a workspace file named after the meeting). Pull out decisions and action items; propose the actions as tasks (add them to the board only after I say yes) and write the follow-up mail — create_draft if a mailbox is connected, otherwise in the chat. With a notetaker (Granola, Fireflies, Fathom, Otter, Read AI, Krisp or Pocket) connected, read the meeting's notes and transcript from its tools instead.",
       "icon": "notes",
       "category": "calendar",
       "tags": [
@@ -427,7 +427,8 @@
         "fathom",
         "otter",
         "readai",
-        "krisp"
+        "krisp",
+        "pocket"
       ]
     },
     {
@@ -479,7 +480,7 @@
       "id": "one-on-one-prep",
       "title": "1:1 prep",
       "summary": "Before each one-on-one: what they worked on, asked for, and what you owe them.",
-      "description": "Each morning, find today's events in the calendar (Google Calendar list_events/get_event, or Cal.com/Calendly bookings — whichever is connected) with exactly one other attendee from my team, and set yourself a reminder 30 minutes before (set_reminder). Then brief me: their tasks on the task board (task API: list tasks with status, owner, deadline) (done and in progress), what they asked me for and what I owe them (recent_messages, memory_search). If a notetaker (Granola, Fireflies, Fathom, Otter, Read AI or Krisp) is connected, start from the notes of your previous one-on-one with them (its tools): what was agreed, what was left open.",
+      "description": "Each morning, find today's events in the calendar (Google Calendar list_events/get_event, or Cal.com/Calendly bookings — whichever is connected) with exactly one other attendee from my team, and set yourself a reminder 30 minutes before (set_reminder). Then brief me: their tasks on the task board (task API: list tasks with status, owner, deadline) (done and in progress), what they asked me for and what I owe them (recent_messages, memory_search). If a notetaker (Granola, Fireflies, Fathom, Otter, Read AI, Krisp or Pocket) is connected, start from the notes of your previous one-on-one with them (its tools): what was agreed, what was left open.",
       "icon": "users",
       "category": "team",
       "tags": [
@@ -1324,7 +1325,7 @@
       "id": "meeting-actions",
       "title": "Action items from meetings",
       "summary": "After each meeting: who does what by when, ready to put on the board.",
-      "description": "A few times a day, list meetings that ended since the last check with the connected notetaker's tools — Granola, Fireflies, Fathom, Otter, Read AI or Krisp (keep the last one seen in your notes). For each, pull the action items from the notes and transcript: what, who owns it, by when if said. Send them in one message per meeting, with the meeting's name; offer to add the person's own items to the task board (task tools) — add only after a yes. Skip meetings with no action items, and never quote private small talk.",
+      "description": "A few times a day, list meetings that ended since the last check with the connected notetaker's tools — Granola, Fireflies, Fathom, Otter, Read AI, Krisp or Pocket (keep the last one seen in your notes). For each, pull the action items from the notes and transcript: what, who owns it, by when if said. Send them in one message per meeting, with the meeting's name; offer to add the person's own items to the task board (task tools) — add only after a yes. Skip meetings with no action items, and never quote private small talk.",
       "icon": "checklist",
       "category": "calendar",
       "tags": [
@@ -1337,7 +1338,8 @@
         "fathom",
         "otter",
         "readai",
-        "krisp"
+        "krisp",
+        "pocket"
       ]
     },
     {
