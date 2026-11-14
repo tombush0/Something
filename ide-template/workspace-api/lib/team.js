@@ -992,7 +992,7 @@ export function isAllowedGroup(chatId) {
 
 /**
  * Add / update an allow-listed group. `requireMention` defaults to FALSE
- * (ambient — the whole point of group mode); `beat` is an optional operator
+ * (ambient — the whole point of group mode), TRUE for a Google Chat space; `beat` is an optional operator
  * override that steers what the relevance watcher treats as on-beat.
  */
 export function addGroup({ chatId, title, requireMention, beat, language, openAudience, privateAnswers, actor } = {}) {
@@ -1006,9 +1006,13 @@ export function addGroup({ chatId, title, requireMention, beat, language, openAu
   // an outsider is in the room (with the room's own memory only, then). Both
   // can be turned off.
   const slack = groupIdKind(id) === 'slack' || groupIdKind(id) === 'gchat';
+  // Google Chat shows the working line as a real message, so a space starts
+  // with "only when called": the assistant reads everything but speaks only
+  // when @mentioned or asked in a thread it is in. Slack keeps joining in.
+  const callOnlyByDefault = groupIdKind(id) === 'gchat';
   cfg.groups[id] = {
     title:          title != null ? String(title).slice(0, 120) : (prev.title || ''),
-    requireMention: requireMention != null ? !!requireMention : (prev.requireMention ?? false),
+    requireMention: requireMention != null ? !!requireMention : (prev.requireMention ?? callOnlyByDefault),
     // Paused: registered, but the room holds someone not on the roster (the
     // audience check), so the assistant stays silent until it is ours again.
     ...(prev.paused ? { paused: true } : {}),

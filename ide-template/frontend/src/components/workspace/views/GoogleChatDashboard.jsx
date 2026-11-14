@@ -129,7 +129,7 @@ function pillTitle(listener) {
 function stateLine(g) {
   const outsiders = g.audience?.outsiders?.length || 0;
   if (g.paused) return `${outsiders} ${outsiders === 1 ? 'member' : 'members'} not on the team`;
-  const how = g.requireMention ? 'Replies when mentioned' : 'Joins in on its own';
+  const how = g.requireMention ? 'Only when called' : 'Joins in on its own';
   return g.openAudience ? `${how} · open to outsiders` : how;
 }
 
@@ -187,7 +187,7 @@ function SpaceModal({ group, avatars, names, onClose, onSaved }) {
       onSave={() => run('save', () => call(CHANNELS_API, { method: 'POST', body: JSON.stringify({ chatId: group.chatId, requireMention: !ambient, openAudience, privateAnswers: mine ? 'team' : 'off' }) }))}
       saving={busy === 'save'} busy={busy} err={err}
       danger dangerLabel="Forget space" dangerBusyLabel="Forgetting…" onDanger={() => run('danger', () => call(`${CHANNELS_API}/${encodeURIComponent(group.chatId)}`, { method: 'DELETE' }))}>
-      <ModalRow label="Joins in on its own" tip="Whether the assistant follows the conversation and chimes in when it can help, or only answers when someone mentions it.">
+      <ModalRow label="Joins in on its own" tip="On: the assistant follows the conversation and chimes in when it can help. Off (only when called): it reads everything for context but stays out of sight, answering only an @mention or a question or task for it in a thread it is in.">
         <Switch on={ambient} onToggle={() => setAmbient(v => !v)} />
       </ModalRow>
       <ModalRow label="Open to outsiders" tip="Whether the assistant keeps working when someone outside the team is in the space. It then uses this space's own memory only, never the team's.">

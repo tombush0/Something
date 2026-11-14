@@ -864,6 +864,15 @@ watcher, decision, group turn and rules — behind the Google Chat channel
 adapter; its id is `gchat-<space id>` (`lib/integrations/gchat-spaces.js`).
 What differs, because of what Chat allows an app:
 
+- **Only when called, by default.** Chat shows the working line as a real
+  message, so a space starts with "joins in on its own" switched off
+  (`requireMention`): every message is kept as context and memory, but a plain
+  one starts nothing — no gate, no turn, nothing shown. An @mention is
+  answered; a message in a thread the assistant is in goes to the gate, which
+  must judge it a question or task for the assistant (on the stricter
+  `GROUP_CALLED_THREAD_THRESHOLD`, 0.7), and any gate failure is silence.
+  Naming the assistant without the @ and the engaged window do not count. The
+  same switch works for a Slack channel, where it stays on by default.
 - **Hearing the whole space** needs the administrator-approved `chat.app.*`
   scopes: an approved space gets a Workspace Events subscription that brings
   every message and every join or leave. Without it the assistant hears only

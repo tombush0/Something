@@ -54,6 +54,11 @@ const MAX_WINDOW_MS     = num('GROUP_WATCHER_MAX_WINDOW_MS', 12000);
 // (0.55 since group-mode v2: live audit showed 0.45-0.65 verdicts firing on pure
 // human-to-human banter; a direct mention/name still bypasses the gate entirely.)
 const SPEAK_THRESHOLD   = num('GROUP_SPEAK_THRESHOLD', 0.55);
+// "Only when called" rooms (group.requireMention): a message in a thread the
+// assistant is in still needs the gate to judge it a question or task for the
+// assistant, and on a stricter bar — chatter between people in that thread
+// must not start a turn (Google Chat shows the working line as a message).
+const CALLED_THREAD_THRESHOLD = num('GROUP_CALLED_THREAD_THRESHOLD', 0.7);
 // 30s (was 20s): the CLI cold start is a lottery under load and each timeout is
 // a silently dropped message; the timer is a CAP, not a wait — a healthy gate
 // still answers in ~3s. With the engaged-dialogue tier below, gate timeouts no
@@ -1853,6 +1858,29 @@ async function flush(chatId) {
   try { return await flushBurst(chatId, taken); }
   finally { for (const p of taken) { try { unlinkSync(p); } catch { /* already gone */ } } }
 }
+/**
+ * "Only when called": should a message in a thread the assistant is in start a
+ * turn? The gate rules on those messages only, on the stricter bar. Every
+ * failure means silence: the asker can always @mention.
+ */
+async function decideCalledThread(chatId, group, hist, threadMsgs) {
+  const last = threadMsgs[threadMsgs.length - 1] || null;
+  if (!threadMsgs.length) return { target: null, beat: null, confidence: 0, reason_enum: 'call-only', speak: false };
+  if (!budgetAllows() || !(await acquireSlot())) return { target: last, beat: null, confidence: 0, reason_enum: 'flood-capped', speak: false };
+  let res;
+  try { res = await classifyWithRetry(group, hist, new Set(threadMsgs.map(m => String(m.message_id)))); }
+  finally { releaseSlot(); }
+  if (!res.ok) {
+    if (gateFailureKind(res) === 'limit') noteGateFailure(chatId, group, 'limit', String(res.error || ''));
+    return { target: last, beat: null, confidence: 0, reason_enum: res.reason_enum || 'gate-failed', speak: false };
+  }
+  const d = res.decision;
+  if (d.durable) markDurable(chatId);
+  const target = threadMsgs.find(m => String(m.message_id) === String(d.target_message_id)) || last;
+  const speak = !!d.respond && d.confidence >= CALLED_THREAD_THRESHOLD;
+  return { target, beat: d.beat, confidence: d.confidence, reason_enum: speak ? 'thread-called' : (d.respond ? 'below-threshold' : 'gate-skip'), speak };
+}
+
 async function flushBurst(chatId, taken) {
   const buf = buffers.get(chatId);
   if (!buf) return;
@@ -1884,6 +1912,23 @@ async function flushBurst(chatId, taken) {
   //   3. everything else → the probabilistic Haiku gate ("should I join a
   //      conversation I'm not part of?" — a gate failure there means safe
   //      silence, not a lost request)
+  // "Only when called" (the room's "joins in on its own" switch is off): a
+  // plain message is context only — no gate, no brain, nothing shown. An
+  // @mention (or a reply to the bot) speaks; a message in a thread the
+  // assistant is in goes to the gate, which must judge it a question or task
+  // for the assistant. Naming it without the @ and the engaged window do not
+  // count here: people talk about the assistant, too.
+  if (group.requireMention) {
+    const called = burst.find(m => m.resumed || m.is_mention || m.is_reply_to_bot);
+    const verdict = called
+      ? { target: called, beat: 'addressed', confidence: 1, reason_enum: called.resumed ? 'resumed' : 'mention-bypass', speak: true }
+      : await decideCalledThread(chatId, group, hist, candidates.filter(m => inBotThread(chatId, m)));
+    if (!verdict.speak || !sendingEnabled(chatId)) {
+      return audit({ chat_id: chatId, msg_id: (verdict.target || lastTargetable).message_id, decision: verdict.speak ? 'answer' : 'ignore', beat: verdict.beat, confidence: verdict.confidence, reason_enum: verdict.reason_enum, preview: clip((verdict.target || lastTargetable).text, 120) });
+    }
+    return speakTo(chatId, group, burst, hist, verdict, taken);
+  }
+
   const addressed = burst.find(m => m.resumed || m.is_mention || m.is_reply_to_bot || inBotThread(chatId, m) || namesSelf(m.text));
   const engagedFrom = !addressed
     ? [...candidates].reverse().find(m => Date.now() - engagedAt(chatId, m.from_id) < ENGAGED_WINDOW_MS)
@@ -1947,6 +1992,14 @@ async function flushBurst(chatId, taken) {
     return audit({ chat_id: chatId, msg_id: target.message_id, decision: speak ? 'answer' : 'ignore', beat, confidence, reason_enum, preview: clip(target.text, 120) });
   }
 
+  return speakTo(chatId, group, burst, hist, { target, beat, confidence, reason_enum }, taken);
+}
+
+/**
+ * Answer `target` in the room: fetch its files, run the brain, post the reply.
+ * Shared by both deciders (joins-in-on-its-own and only-when-called).
+ */
+async function speakTo(chatId, group, burst, hist, { target, beat, confidence, reason_enum }, taken) {
   // Positive verdict + sending on → compose a reply and post it to the group.
   // The heavy compose spawn runs under the SAME inflight semaphore (OOM guard on
   // the small VPS). chatId is the flush loop's OWN id — NEVER parsed from the
@@ -2313,5 +2366,5 @@ function forgetRam(chatId) {
   history.delete(chatId); historyLoaded.delete(chatId); lastDialogue.delete(chatId);
   for (const m of [botThreads, spokeThreads]) for (const k of [...m.keys()]) if (k.startsWith(`${chatId}|`)) m.delete(k);
 }
-export const __test = { isCandidate, sessionKeyFor, deframe, compileBeat, parseDecision, stripScaffolding, failureNoticeText, delegatePrompt, pendingDelegatePath,
+export const __test = { isCandidate, sessionKeyFor, noteSpoke, deframe, compileBeat, parseDecision, stripScaffolding, failureNoticeText, delegatePrompt, pendingDelegatePath,
   pushHistory, ensureHistoryLoaded, engage, disengage, engagedAt, audit, forgetRam, forgetSharedIndex: () => { sharedIndexCache = { at: 0, lines: [] }; } };
