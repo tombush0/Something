@@ -43,6 +43,7 @@ const VIEW_ROUTES = [
   { path: '/browser-agent', selected: { path: '.claude/browser-agent', type: 'browser-agent' } },
   { path: '/coding-agents', selected: { path: '.claude/coding-agents', type: 'coding-agents' } },
   { path: '/team',         selected: { path: '.claude/team',       type: 'team' } },
+  { path: '/usage',        selected: { path: '.claude/usage',      type: 'usage' } },
   { path: '/ai',           selected: { path: '.claude',            type: 'dashboard' } },
   { path: '/memory',       selected: { path: 'memory',             type: 'memory' } },
   { path: '/telegram',     selected: { path: '.claude/telegram',   type: 'telegram' } },

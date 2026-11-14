@@ -46,6 +46,7 @@ import { CLAUDE_BIN } from '../lib/config.js';
 import { getUser, list as teamRoster, getTeamMode } from '../lib/team.js';
 import { preferredLanguage } from '../lib/memory-loader.js';
 import { openTabTurn, closeTabTurn } from './tab.js';
+import { jobEnv } from '../lib/usage-otlp.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -189,7 +190,7 @@ function maybeAutoTitle(actor, sessionId) {
     '--dangerously-skip-permissions',
     '--model', 'claude-haiku-4-5',
     '--output-format', 'text',
-  ], { stdio: ['pipe', 'pipe', 'pipe'], env: childEnv });
+  ], { stdio: ['pipe', 'pipe', 'pipe'], env: jobEnv('chat-title', childEnv) });
 
   // A write to a child that exited first raises on stdin; without a
   // listener that is an uncaught exception that takes workspace-api down.
@@ -796,6 +797,7 @@ export default function chatRouter() {
       actorName:     req.chatActorName,  // per-turn [ACTOR …] context line
       actorIsAdmin:  req.chatIsAdmin,
       teammates:     req.chatTeammates,  // roster so the bot recognises other people
+      usage:         { channel: 'web', kind: tabToken ? 'page' : 'chat' },
       onText:      (delta) => { assistantText += delta; sendData(delta); },
       onToolStart: ({ id, name }) => {
         if (!toolById.has(id) && toolSteps.length < MAX_STORED_TOOLS) {

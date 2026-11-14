@@ -390,6 +390,7 @@ export default function internalRouter() {
         actor: m.slug,
         actorName: m.displayName || m.slug,
         actorIsAdmin: false,
+        usage: wantDeliver ? { channel: 'scheduled', kind: 'routine', label: String(deliver.title || '').slice(0, 120) || undefined } : { channel: 'scheduled', kind: 'invoke' },
         onText: (t) => { if (wantDeliver) reply += t; },
         onToolStart: (info) => {
           if (wantDeliver && /web_send_message/.test(String(info?.name || ''))) sentItself = true;

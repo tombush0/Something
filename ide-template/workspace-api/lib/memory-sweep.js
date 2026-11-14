@@ -39,6 +39,7 @@ import { getTeamMode, isAllowedGroup, dmOwnerSlug } from './team.js';
 import { remember, readLog } from './memory-engine.js';
 import { CARDS } from './memory-registry.js';
 import { v4Mode } from './memory-ledger.js';
+import { jobEnv } from './usage-otlp.js';
 
 const num = (k, d) => { const v = Number(process.env[k]); return Number.isFinite(v) ? v : d; };
 
@@ -254,7 +255,7 @@ function runLLM(system, userMessage) {
       proc = spawn(CLAUDE_BIN, [
         '-p', '--dangerously-skip-permissions', '--strict-mcp-config', '--no-session-persistence',
         '--model', MODEL, '--append-system-prompt', system, '--output-format', 'text',
-      ], { stdio: ['pipe', 'pipe', 'pipe'], env, cwd: tmpdir() });
+      ], { stdio: ['pipe', 'pipe', 'pipe'], env: jobEnv('memory-sweep', env), cwd: tmpdir() });
     } catch (err) { return resolve({ ok: false, error: `spawn: ${err.message}` }); }
     let out = '', done = false;
     const finish = (r) => { if (done) return; done = true; clearTimeout(t); try { proc.kill('SIGKILL'); } catch { /* gone */ } resolve(r); };

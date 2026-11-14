@@ -186,6 +186,7 @@ export async function lookupMine({ member, question, room }) {
         actor: member.slug,
         actorName: member.displayName || member.slug,
         actorIsAdmin: member.role === 'admin',
+        usage: { channel: 'lookup', kind: 'lookup' },
         teammates: [],
         onlyMcp: [],                  // workspace-api alone, no built-in tools
         disallowedTools: DENIED_TOOLS,
@@ -250,6 +251,7 @@ export async function askForAgent({ member, question, client }) {
         actor: member.slug,
         actorName: member.displayName || member.slug,
         actorIsAdmin: member.role === 'admin',
+        usage: { channel: 'lookup', kind: 'lookup' },
         teammates: [],
         onlyMcp: [],                  // workspace-api alone, no built-in tools
         disallowedTools: DENIED_TOOLS,
@@ -354,6 +356,7 @@ export async function askMyConnections({ member, question, room }) {
         actor: member.slug,
         actorName: member.displayName || member.slug,
         actorIsAdmin: member.role === 'admin',
+        usage: { channel: 'lookup', kind: 'lookup' },
         teammates: [],
         onlyMcp: servers,             // their own servers; no built-in tools
         disallowedTools: CONNECTIONS_DENIED_TOOLS,

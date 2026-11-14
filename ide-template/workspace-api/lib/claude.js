@@ -31,6 +31,8 @@ import { primaryAdminSlug, memberGroupsOf, getTeamMode, list as teamList, getDef
 import * as asks from './memory-asks.js';
 import { buildRecallBlock, PERSON_BUDGET_MS, withRecall } from './memory-recall.js';
 import { limitNotice } from './usage-limit.js';
+import { createUsageTap, usageContext } from './usage-tap.js';
+import { withoutTelemetry } from './usage-otlp.js';
 import { resolve as resolveBranding } from './branding.js';
 import { setTurnRecall, issueTurnToken, revokeTurnToken } from './turn-identity.js';
 import { normalizeGroupId } from './group-id.js';
@@ -116,7 +118,9 @@ export function turnEnv(env) {
   // a turn user cannot read and must not try to: a turn's config is its slot's
   // own (HOME), and its MCP servers come in the file written for the turn.
   delete out.CLAUDE_CONFIG_PATH;
-  return out;
+  // A streamed turn's usage is read from its stream (usage-tap.js): its own
+  // telemetry export would count it twice.
+  return withoutTelemetry(out);
 }
 
 /**
@@ -373,7 +377,7 @@ function turnModel() {
 const ACT_EFFORT = process.env.IDE_ACT_EFFORT || 'medium';
 
 
-export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', message, sessionId, webSessionId, relayThread, actor, actorName, actorIsAdmin, teammates, excludeIds: callerExcludeIds, groupContext, groupId = null, groupOnly = false, recallQuery = null, recallHistory = [], disallowedTools, onlyMcp = null, warmKey = null, onText, onToolStart, onToolEnd, onToolInput, onImage, onError, onDone, onSettled, onInterrupted = null }) {
+export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', message, sessionId, webSessionId, relayThread, actor, actorName, actorIsAdmin, teammates, excludeIds: callerExcludeIds, groupContext, groupId = null, groupOnly = false, recallQuery = null, recallHistory = [], disallowedTools, onlyMcp = null, warmKey = null, onText, onToolStart, onToolEnd, onToolInput, onImage, onError, onDone, onSettled, onInterrupted = null, usage = null }) {
   const args = [
     '-p',
     '--dangerously-skip-permissions',
@@ -640,7 +644,10 @@ export function runClaudeTurn({ tabToken, actTurn = false, systemNote = '', mess
   // the MCP startup again. Only a plain person's turn (no page, no restricted
   // tool set, no group), keyed by the caller (`<slug>:<surface>`).
   const useWarm = warmOn() && !!warmKey && !pageTurn && !Array.isArray(onlyMcp) && !groupContext;
-  const callbacks = { onText, onToolStart, onToolEnd, onToolInput, onImage, onError, onDone, onSettled, onInterrupted };
+  // `usage` says where the turn comes from ({ channel, kind, label }) for the
+  // admin's Usage page; without it, a room's turn is a group turn, else web.
+  const usageTap = createUsageTap(usageContext({ usage, actor, groupContext, groupId, webSessionId, sessionId }));
+  const callbacks = { onText, onToolStart, onToolEnd, onToolInput, onImage, onError, onDone, onSettled, onInterrupted, usageTap };
   if (useWarm) {
     const w = warm.get(warmKey);
     // Reused only for the session it is on: a caller with no session id is
@@ -774,7 +781,7 @@ function turnHandle(proc, parser, warm) {
  * for every message, a one-turn process has one for its life. In warm mode the
  * turn is over at the `result` event (the process stays); otherwise at exit.
  */
-function makeTurnParser({ onText, onToolStart, onToolEnd, onToolInput, onImage, onError, onDone, onSettled, onInterrupted = null, actor, groupContext, sessionId, warm = false, kill, onTurnEnd = null }) {
+function makeTurnParser({ onText, onToolStart, onToolEnd, onToolInput, onImage, onError, onDone, onSettled, onInterrupted = null, usageTap = null, actor, groupContext, sessionId, warm = false, kill, onTurnEnd = null }) {
   let buffer = '';
   let capturedSessionId = sessionId || null;
   // Set by interruptTurn: the turn's end is then "interrupted", not an error,
@@ -857,6 +864,7 @@ function makeTurnParser({ onText, onToolStart, onToolEnd, onToolInput, onImage, 
   };
 
   function handle(evt) {
+    usageTap?.observe(evt);
     // Capture session_id from any event that carries it.
     if (!capturedSessionId && evt.session_id) capturedSessionId = evt.session_id;
 
@@ -1124,6 +1132,7 @@ export function runHeadlessTurn({ message, actor, actorName, servers = [], label
     const proc = runClaudeTurn({
       message, actor, actorName: actorName || actor, actorIsAdmin: false, teammates: [],
       onlyMcp: servers,
+      usage: { channel: 'system', kind: 'job', label },
       onText: (t) => { text += t; },
       onToolStart: (info) => { calls++; log(`tool ${String(info?.name || '?').replace(/^mcp__/, '')} (${Math.round((Date.now() - t0) / 1000)} s)`); },
       onToolEnd: () => {}, onImage: () => {},

@@ -343,6 +343,7 @@ function defaultRunTurn({ member, body, sessionId, surface }) {
         sessionId: sessionId || undefined,
         // The conversation's process may stay open between messages (WARM_TURNS).
         warmKey: `${member.slug}:${surfaceOf(surface)}`,
+        usage: { channel: surfaceOf(surface), kind: 'dm' },
         systemNote: SURFACES[surfaceOf(surface)].note,
         onText: (t) => { out += t; },
         onToolStart: () => {

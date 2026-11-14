@@ -1420,6 +1420,18 @@ else
     export REMINDER_DEFAULT_CHANNEL=web
     log "TELEGRAM_BOT_TOKEN not set — launching claude without channel plugin (web/tmux I/O only). REMINDER_DEFAULT_CHANNEL=web."
 fi
+# The admin's Usage page: this session's model calls and tool calls are
+# exported by the CLI itself (OpenTelemetry events, never message text) to
+# workspace-api on loopback (lib/usage-otlp.js). Workspace-api streams its
+# own turns; this brain is the one it cannot see.
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_METRICS_EXPORTER=none
+export OTEL_TRACES_EXPORTER=none
+export OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="http://127.0.0.1:${WORKSPACE_API_PORT:-3001}/api/internal/otlp/v1/logs"
+export OTEL_LOGS_EXPORT_INTERVAL=5000
+export OTEL_RESOURCE_ATTRIBUTES="ws.source=brain,ws.channel=$( [ -n "$TELEGRAM_BOT_TOKEN" ] && echo telegram || echo brain )${IDE_ACTOR_SLUG:+,ws.actor=$IDE_ACTOR_SLUG}"
 tmux -L "$SESSION" new-session -d -s "$SESSION" \
     "cd $PROJECT_DIR && claude --dangerously-skip-permissions --add-dir '$CLAUDE_CONFIG_DIR' $CHANNELS_ARG $CLAUDE_EXTRA_ARGS"
 

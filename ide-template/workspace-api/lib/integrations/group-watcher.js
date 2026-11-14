@@ -40,6 +40,7 @@ import { prefetchMine, memberBySlug, ownConnections, teamConnections } from './p
 import { isUsageLimit, parseResetAt, resetDelayMs, limitNotice, noticeLang, noticeResetsAt, resetInstant } from '../usage-limit.js';
 import { resolve as resolveBranding } from '../branding.js';
 import { injectBotFrame } from '../bot-inject.js';
+import { jobEnv } from '../usage-otlp.js';
 
 // ─── Tunables (all env-overridable; defaults are the Phase-1 starting point) ──
 const num = (k, d) => { const v = Number(process.env[k]); return Number.isFinite(v) ? v : d; };
@@ -891,7 +892,7 @@ function classify(group, ctxMsgs, newIds) {
         '--model', 'claude-haiku-4-5',
         '--append-system-prompt', system,
         '--output-format', 'text',
-      ], { stdio: ['pipe', 'pipe', 'pipe'], env: childEnv, cwd: CLASSIFY_CWD });
+      ], { stdio: ['pipe', 'pipe', 'pipe'], env: jobEnv('room-classify', childEnv), cwd: CLASSIFY_CWD });
     } catch (err) {
       return resolve({ ok: false, reason_enum: 'classify-error', error: err.message });
     }
@@ -1310,6 +1311,7 @@ export function groupTurnParams(group, ctxMsgs, target, cb = {}, opts = {}) {
     // scope-guard hook blocks EVERY private tree at tool time.
     groupContext: true,
     groupId: String(group.chatId),     // memory v4 recall: shared + this group only
+    usage: { channel: a?.kind || 'group', kind: 'group', label: String(group.title || group.chatId).slice(0, 120) },
     groupOnly: outsiders,   // outsiders in the room: this group's scope and nothing shared
     // Redundant with the groupContext prefix exclusion — kept as belt-and-braces
     // for older claude.js versions that only honour excludeIds.
@@ -1812,6 +1814,7 @@ async function runPrivateDelegate(chatId, group, target, task, ctxMsgs = []) {
           actor: member.slug,
           actorName: senderName,
           actorIsAdmin: member.role === 'admin',
+          usage: { channel: adapterFor(chatId)?.kind || 'group', kind: 'delegate', label: String((group && group.title) || chatId || '').slice(0, 120) || undefined },
           teammates: [],
           onText: (t) => { out += t; harvestFiles(); },
           onToolStart: (t) => {

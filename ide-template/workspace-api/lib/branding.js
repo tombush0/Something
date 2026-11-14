@@ -27,6 +27,7 @@ import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PROJECT_DIR, CLAUDE_BIN } from './config.js';
+import { jobEnv } from './usage-otlp.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRESET_DIR = join(__dirname, '..', 'assets', 'avatars');
@@ -367,7 +368,7 @@ async function renameInClaudeMdAsync(oldName, newName) {
       '--output-format', 'text',
     ], {
       cwd: PROJECT_DIR,
-      env: childEnv,
+      env: jobEnv('rename', childEnv),
       stdio: ['pipe', 'ignore', 'pipe'],
       detached: false,
     });

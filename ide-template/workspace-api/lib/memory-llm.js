@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 
 import { CLAUDE_BIN } from './config.js';
 import { hasClaudeToken, readClaudeToken } from './setup.js';
+import { jobEnv } from './usage-otlp.js';
 
 export const MEMORY_MODEL = process.env.MEMORY_V4_MODEL || 'claude-haiku-4-5-20251001';
 // The one judgment that must not be cheap: whether a new note repeats, extends,
@@ -63,7 +64,7 @@ function viaCli({ system, user, schema, model, timeoutMs = TIMEOUT_MS, tools = [
         '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
         '--no-session-persistence', '--setting-sources', '', '--system-prompt', system,
         '--output-format', 'json', '--json-schema', JSON.stringify(schema),
-      ], { stdio: ['pipe', 'pipe', 'pipe'], env, cwd: tmpdir() });
+      ], { stdio: ['pipe', 'pipe', 'pipe'], env: jobEnv('memory', env), cwd: tmpdir() });
     } catch (err) { return reject(new Error(`spawn: ${err.message}`)); }
     let out = '', err = '', done = false;
     const finish = (fn) => { if (done) return; done = true; clearTimeout(timer); try { proc.kill('SIGKILL'); } catch { /* gone */ } fn(); };

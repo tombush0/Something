@@ -47,6 +47,9 @@ import meRouter            from './routes/me.js';
 import remindersRouter     from './routes/reminders.js';
 import miniappsRouter      from './routes/miniapps.js';
 import tasksRouter         from './routes/tasks.js';
+import usageRouter         from './routes/usage.js';
+import { prune as pruneUsage } from './lib/usage-ledger.js';
+import { startUsageAlerts } from './lib/usage-alerts.js';
 import mcpRouter           from './routes/mcp.js';
 import onboardingRouter    from './routes/onboarding.js';
 import docsCommentsLoginRouter, { attachVncUpgradeHandler, ensureBrowserOnBoot } from './routes/docs-comments-login.js';
@@ -154,6 +157,7 @@ app.use('/api', meRouter());
 app.use('/api', remindersRouter());
 app.use('/api', miniappsRouter());
 app.use('/api', tasksRouter());
+app.use('/api', usageRouter());
 app.use('/api', onboardingRouter());
 app.use('/api/integrations/docs-comments', docsCommentsLoginRouter());
 
@@ -422,6 +426,10 @@ app.use((err, _req, res, _next) => {
 
 const server = app.listen(PORT, async () => {
   process.stdout.write(`[workspace-api] listening on :${PORT}, project=${PROJECT_DIR}\n`);
+  // The admin's Usage page: alerts on what is recorded, and a daily fold of
+  // months past the ledger's 90 days.
+  try { startUsageAlerts(); pruneUsage(); setInterval(() => { try { pruneUsage(); } catch { /* next day */ } }, 24 * 3600_000).unref(); }
+  catch (err) { process.stderr.write(`[workspace-api] usage ledger: ${err.message}\n`); }
 
   // A room message whose turn died with the last process (a deploy) is answered
   // now; a little later, so the channels are up to send it.

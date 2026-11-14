@@ -17,6 +17,7 @@ import IntegrationPage from './views/IntegrationPage.jsx';
 import ResponsibilitiesDashboard from './views/ResponsibilitiesDashboard.jsx';
 import RemindersDashboard from './views/RemindersDashboard.jsx';
 import TeamDashboard      from './views/TeamDashboard.jsx';
+import UsageDashboard     from './views/UsageDashboard.jsx';
 import MemoryDashboard    from './views/MemoryDashboard.jsx';
 import MemoryV4View       from './views/MemoryV4View.jsx';
 import { LegacyMemoryNotice } from './MemoryMigration.jsx';
@@ -132,6 +133,7 @@ function ActiveView({ selected, fileEventNonce, onSelect, sidebarOpen }) {
   if (type === 'responsibilities')                       return <ResponsibilitiesDashboard fileEventNonce={fileEventNonce} sidebarOpen={sidebarOpen} />;
   if (type === 'reminders')                              return <RemindersDashboard fileEventNonce={fileEventNonce} sidebarOpen={sidebarOpen} />;
   if (type === 'team')                                   return <TeamDashboard sidebarOpen={sidebarOpen} />;
+  if (type === 'usage')                                  return <UsageDashboard sidebarOpen={sidebarOpen} />;
   if (type === 'memory')                                 return <MemoryView fileEventNonce={fileEventNonce} sidebarOpen={sidebarOpen} onSelect={onSelect} />;
   if (type === 'telegram')                               return <TelegramDashboard sidebarOpen={sidebarOpen} onSelect={onSelect} />;
   if (type === 'slack')                                  return <SlackDashboard sidebarOpen={sidebarOpen} />;

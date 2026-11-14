@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import {
   ChevronRight, Hexagon, KanbanSquare, Images,
   Repeat, UsersRound, Inbox, Search, Cable,
-  FilePlus, FolderPlus,
+  FilePlus, FolderPlus, Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import WorkspaceHeader from './WorkspaceHeader.jsx';
@@ -255,6 +255,13 @@ export default function Sidebar({
           active={selected?.type === 'dashboard'}
           onClick={() => onSelect({ path: '.claude', type: 'dashboard' })}
         />
+        {(me?.isAdmin || me?.role === 'admin') && !IS_DEMO && (
+        <NavRow
+          icon={Gauge} label="Usage" collapsed={collapsed}
+          active={selected?.type === 'usage'}
+          onClick={() => onSelect({ path: '.claude/usage', type: 'usage' })}
+        />
+        )}
         <NavRow
           icon={Repeat} label="Routines" collapsed={collapsed}
           active={selected?.type === 'responsibilities'}
