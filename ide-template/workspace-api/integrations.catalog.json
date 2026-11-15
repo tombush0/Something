@@ -1279,7 +1279,7 @@
       "id": "canva",
       "label": "Canva",
       "logo": "/integrations/canva.svg",
-      "description": "Designs, folders, comments and assets through Canva's official MCP server: find and read designs, then create, edit and export them. Set it to read only to browse without changes.",
+      "description": "Designs, folders, comments and assets through Canva's official Connect MCP server: find and read designs, then create, edit and export them. Each person signs in with their own Canva account through the team's Canva app; set it to read only to browse without changes.",
       "category": "content",
       "fields": [
         {
@@ -1290,12 +1290,35 @@
       ],
       "mcp": {
         "type": "http",
-        "url": "https://mcp.canva.com/mcp",
+        "url": "https://api.canva.com/connect/v1/mcp",
         "name": "canva",
         "allowedHosts": [
-          "mcp.canva.com"
-        ]
+          "api.canva.com"
+        ],
+        "oauthClient": "app"
       },
+      "steps": [
+        {
+          "title": "Create a private Canva integration",
+          "body": "Open the [Canva Developer Portal](https://www.canva.com/developers/integrations/connect-api) → **Your integrations** → **Create an integration**, and choose **Private** (only your Canva team can use it, no review). Canva asks for two-factor authentication on your account first."
+        },
+        {
+          "title": "Copy its client ID and secret",
+          "body": "In **Configuration**, give it the name **{{botDisplayName}}**, copy the **Client ID**, then **Generate secret** and copy it. Type both into the **Canva app** box on this page and save. The secret is stored encrypted and never shown again."
+        },
+        {
+          "title": "Allow the scopes",
+          "body": "In **Scopes**, tick read and write for designs (meta and content), folders, assets and comments, plus profile read. Brand templates and brand kits only matter on a paid Canva plan."
+        },
+        {
+          "title": "Add the redirect URL",
+          "body": "In **Authentication**, add this redirect URL exactly:\n\n`{{origin}}/api/integrations/oauth/callback`"
+        },
+        {
+          "title": "Sign in",
+          "body": "Back here, **Sign in to Canva**. Every teammate does the same on their own **You** tab, with their own Canva account."
+        }
+      ],
       "writeTools": [
         "create-design",
         "generate-design",

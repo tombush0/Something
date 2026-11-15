@@ -1,6 +1,6 @@
 ---
 name: canva
-description: How to browse, read and work on Canva designs through Canva's official hosted MCP server — searching designs and folders, reading a design's pages, text and presenter notes, thumbnails, comments, exporting to PDF/PNG and other formats, and (when the connection allows changes) creating, editing, copying and commenting on designs, uploading assets and organising folders. Use when the person mentions Canva, a design, a social post, a deck or a flyer made in Canva, pastes a canva.com link, or wants something visual made in their brand style.
+description: How to browse, read and work on Canva designs through Canva's official Connect MCP server — searching designs and folders, reading a design's pages, text and presenter notes, thumbnails, comments, exporting to PDF/PNG and other formats, and (when the connection allows changes) creating, editing, copying and commenting on designs, uploading assets and organising folders. Use when the person mentions Canva, a design, a social post, a deck or a flyer made in Canva, pastes a canva.com link, or wants something visual made in their brand style.
 requires: canva
 allowed-tools: mcp__canva__*
 ---
@@ -9,9 +9,9 @@ allowed-tools: mcp__canva__*
 
 ## What it is for
 
-Canva is where the person's visual material lives: social posts, decks, flyers, documents and the brand guidelines themselves. This server lets you find a design, read what's in it, export it, and — when the connection is set to read and write — create and edit designs, acting as the person who connected it.
+Canva is where the person's visual material lives: social posts, decks, flyers, documents and the brand guidelines themselves. This server lets you find a design, read what's in it, export it, and — when the connection allows it — create and edit designs, acting as the person who connected it. Each person signs in with their own Canva account through the team's Canva app, so you see what that person can see in Canva.
 
-**Read only is the normal setting.** If a change is refused as read-only, tell the person plainly: "Canva is connected read-only; an admin can allow changes on its page in Integrations." Don't look for a way around it.
+**Treat reading as the normal job.** If a change is refused as read-only, tell the person plainly: "Canva is connected read-only; an admin can allow changes on its page in Integrations." Don't look for a way around it. Even where writing is allowed, change nothing without the yes described below.
 
 ## Brand guidelines first
 

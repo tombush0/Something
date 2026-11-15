@@ -311,6 +311,7 @@ export default function integrationsRouter() {
         ...(activeFor ? { activeFor } : {}),
         canConnectWorkspace: admin,
         canConnectPersonal:  Boolean(entry.personal) && Boolean(me),
+        ...(oauth.usesAppClient(entry) ? { appClient: oauth.appClientStatus(entry.id) } : {}),
         // Pausable integrations: switched off for now, key kept.
         ...(entry.pausable ? { paused: Boolean(s?.active) && store.isPaused(entry.id) } : {}),
         // The Slack socket: up or not, since when, what it missed — and whether
@@ -424,8 +425,25 @@ export default function integrationsRouter() {
       return res.redirect(authorizeUrl);
     } catch (err) {
       process.stderr.write(`[integrations] oauth start ${id}: ${err.message}\n`);
+      if (err.code === 'app_client_missing') return res.status(400).send(oauthResultPage(false, escapeHtml(err.message), id));
       return res.status(502).send(oauthResultPage(false, `Could not reach the provider: ${escapeHtml(err.message)}`));
     }
+  });
+
+  // The provider's own developer app (catalog `mcp.oauthClient: "app"`): an
+  // admin types its client ID and secret once; every connection of the
+  // integration signs in through it. The secret is stored encrypted and never
+  // comes back — the page shows only whether the app is set up and its ID.
+  router.put('/integrations/:id/app-client', requireAdmin, readyOr503, rateLimit, express.json({ limit: '4kb' }), (req, res) => {
+    const cat = catalog.get(req.params.id);
+    if (!oauth.usesAppClient(cat)) return res.status(404).json({ error: 'This integration does not use its own developer app.' });
+    try { res.json({ ok: true, appClient: oauth.setAppClient(cat.id, { clientId: req.body?.clientId, clientSecret: req.body?.clientSecret }) }); }
+    catch (err) { res.status(400).json({ error: err.message }); }
+  });
+  router.delete('/integrations/:id/app-client', requireAdmin, readyOr503, rateLimit, (req, res) => {
+    const cat = catalog.get(req.params.id);
+    if (!oauth.usesAppClient(cat)) return res.status(404).json({ error: 'This integration does not use its own developer app.' });
+    res.json({ ok: true, removed: oauth.forgetAppClient(cat.id) });
   });
 
   // Public: a provider without dynamic registration fetches this document by
@@ -586,6 +604,7 @@ export default function integrationsRouter() {
       canConnectWorkspace: admin,
       canConnectPersonal: Boolean(cat.personal) && Boolean(me),
       globalFieldValues: store.isActive(id) ? store.readGlobalFieldValues(id) : {},
+      ...(oauth.usesAppClient(cat) ? { appClient: oauth.appClientStatus(id, { admin }) } : {}),
     });
   });
 

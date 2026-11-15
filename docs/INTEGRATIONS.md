@@ -121,7 +121,7 @@ it works. `open` = no auth at all (keyless hosted server, instant-activate).
 | **Cal.com** | Bookings and availability | OAuth |
 | **ClickUp** | Tasks, docs, time tracking | OAuth |
 | **Calendly** | Scheduling and invitees | OAuth |
-| **Canva** | Designs, folders, comments, exports; create and edit designs (write tools listed in `writeTools`, so read-only blocks every change) | OAuth |
+| **Canva** | Designs, folders, comments, exports; create and edit designs (write tools listed in `writeTools`, so read-only blocks every change). Canva's Connect MCP takes no dynamic registration for a workspace domain, so an admin creates a private Canva integration once and stores its client ID and secret on the page (`mcp.oauthClient: "app"`); each person then signs in with their own Canva account | OAuth (own app) |
 | **Cloudflare** | Workers, KV, R2, D1 | OAuth |
 | **Crypto.com** | Crypto prices and charts | open |
 | **DeepL** | Translate, rewrite, glossaries | OAuth |
@@ -342,6 +342,19 @@ differ and still works, because broker fetches use the open listener).
   as the single redirect URI, and the public-client grant shape; nothing else.
   Entries without the flag are untouched. Behaviour test:
   `node lib/oauth-client-metadata.test.mjs`.
+- **Neither, but the provider's own developer app** (Canva's Connect MCP): an entry
+  with `mcp.oauthClient: "app"` never registers. An admin creates the provider's
+  app once, with `https://<this domain>/api/integrations/oauth/callback` as its
+  redirect URL, and types its client ID and secret into the app box on the
+  integration's page (`PUT /api/integrations/:id/app-client`, admin only). The
+  secret is AES-GCM-encrypted with the store's key in `mcp-oauth-clients.json` and
+  never returned; the page shows whether the app is set up and, to an admin, its
+  client ID. Sign-in is refused with a plain reason until it is. Every connection
+  of the integration — the workspace's and each person's own — goes through that
+  one app with its own tokens; the SDK sends the secret by HTTP Basic at the token
+  endpoint (code exchange and refresh). Disconnecting the last connection keeps the
+  app; `DELETE /api/integrations/:id/app-client` removes it. Behaviour test:
+  `node lib/oauth-app-client.test.mjs`.
 - A cached DCR registration is reused **only if its `redirect_uris` contain the
   redirect this flow will send**; otherwise the broker re-registers and logs
   why (`cached client_id was registered for …, not … — re-registering`). This
@@ -433,7 +446,9 @@ can't slip a `custom` provider through without a host.
 
 **Remote MCPs** (`mcp.type: "http"`) take `url`, `name`, `allowedHosts`, and
 optionally `clientIdMetadata: true` for an authorization server without dynamic
-registration that accepts a client ID metadata document (see
+registration that accepts a client ID metadata document, or `oauthClient: "app"`
+for one that wants the provider's own developer app (a client ID and secret an
+admin stores on the integration's page) (see
 [Remote-MCP one-click OAuth](#remote-mcp-one-click-oauth)).
 
 **Bundle MCPs** — `mcp.services: [{ name, command, args }, ...]` on a

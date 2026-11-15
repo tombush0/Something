@@ -190,7 +190,9 @@ function ConnectionCard({ integration, reach, solo = false, detail, canManage, o
     }
     return last;
   }, connected ? { done: 'Changes saved' } : { mode: 'install' })) setDraft({ items: {}, add: null, globals: {} }); };   // a failed save keeps the draft
-  const steps = integration.steps || [];
+  // A provider-app integration: its steps are the admin's app setup, not a person's own sign-in.
+  const appMissing = !!integration.appClient && !integration.appClient.configured;
+  const steps = integration.appClient && reach === 'personal' ? [] : (integration.steps || []);
   const hasSettings = canManage && !oauth && !open;
   return (
     <div className="flex flex-col gap-7">
@@ -221,7 +223,9 @@ function ConnectionCard({ integration, reach, solo = false, detail, canManage, o
             )}
           </div>
         )}
-        {!connected && canManage && (oauth || open) && <Button size="sm" className="relative" disabled={saving} onClick={connect}><Plug />{oauth ? `Sign in to ${integration.label}` : 'Connect'}</Button>}
+        {!connected && canManage && (oauth || open) && (appMissing
+          ? <span className="relative rounded-[6px] bg-background/90 px-3 py-2 text-[13px] text-muted-foreground/80 backdrop-blur">An admin sets up the {integration.label} app first</span>
+          : <Button size="sm" className="relative" disabled={saving} onClick={connect}><Plug />{oauth ? `Sign in to ${integration.label}` : 'Connect'}</Button>)}
         {!canManage && <span className="relative text-[13px] text-muted-foreground/60">{reach === 'workspace' ? 'Admins connect this' : 'Not for your own account'}</span>}
       </div>
       {canManage && reach === 'workspace' && !solo && (
@@ -429,6 +433,61 @@ function PeopleList({ integration, people, onChanged, toast }) {
 }
 
 /** The header's icon slot holds the way back: an arrow to the Integrations list. */
+/**
+ * The provider's own developer app (catalog `mcp.oauthClient: "app"`), set up
+ * once by an admin: its client ID in clear, its secret typed and never shown
+ * again. Every connection — the team's and each person's — signs in through it.
+ */
+function AppClientCard({ integration, onChanged, toast }) {
+  const app = integration.appClient || {};
+  const [clientId, setClientId] = useState(app.clientId || '');
+  const [secret, setSecret] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(!app.configured);
+  const redirect = `${window.location.origin}/api/integrations/oauth/callback`;
+  const base = `/api/integrations/${encodeURIComponent(integration.id)}/app-client`;
+  const tag = { logo: integration.logo, label: integration.label };
+  const save = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api('PUT', base, { clientId, clientSecret: secret });
+      setSecret(''); setEditing(false);
+      await onChanged();
+      toast.pushToast(`${integration.label} app saved`, 'ok', tag);
+    } catch (err) { toast.pushToast(err.message, 'error', tag); }
+    finally { setSaving(false); }
+  };
+  return (
+    <Section title={`${integration.label} app`} right={<span className="text-[11.5px] text-muted-foreground/55">{app.configured ? 'Set up' : 'Needed before anyone signs in'}</span>}>
+      <div className="flex flex-col gap-3 rounded-[6px] border border-border/60 bg-card px-5 py-4">
+        <p className="text-[12.5px] text-muted-foreground/80">
+          The team's own {integration.label} integration: everyone signs in to their own {integration.label} account through it. Its redirect URL is <code className="select-all rounded bg-muted px-1 py-0.5 text-[12px]">{redirect}</code> — see How to set it up.
+        </p>
+        {!editing ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[13px] text-foreground/85">Client ID <code className="rounded bg-muted px-1 py-0.5 text-[12px]">{app.clientId}</code> · secret stored</span>
+            <Button variant="outline" size="sm" onClick={() => { setClientId(app.clientId || ''); setEditing(true); }}>Change</Button>
+          </div>
+        ) : (
+          <form onSubmit={save} className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-[12px] text-muted-foreground/80">Client ID
+              <input value={clientId} onChange={e => setClientId(e.target.value)} autoComplete="off" spellCheck={false} className="rounded border border-border/70 bg-background px-2.5 py-1.5 text-[13px] text-foreground" />
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-muted-foreground/80">Client secret
+              <input type="password" value={secret} onChange={e => setSecret(e.target.value)} autoComplete="new-password" placeholder={app.configured ? 'Leave blank to keep the stored one' : ''} className="rounded border border-border/70 bg-background px-2.5 py-1.5 text-[13px] text-foreground" />
+            </label>
+            <div className="flex items-center justify-end gap-2 sm:col-span-2">
+              {app.configured && <Button type="button" variant="ghost" size="sm" onClick={() => { setSecret(''); setEditing(false); }}>Cancel</Button>}
+              <Button type="submit" size="sm" disabled={saving || !clientId.trim() || (!app.configured && !secret.trim())}>{saving && <Loader2 className="animate-spin" />}Save</Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 function BackToIntegrations(props) {
   const navigate = useNavigate();
   return (
@@ -444,7 +503,7 @@ export default function IntegrationPage({ id, sidebarOpen }) {
   const toast = useIntegrationToasts(branding.botDisplayName);
   const { data, loading, error, reload } = useApi(`/api/integrations/${encodeURIComponent(id)}`);
   const onChanged = useCallback(async () => { invalidate('/api/integrations'); invalidate('/api/memory/v4/sources'); await reload(); }, [reload]);
-  const stepVars = useMemo(() => ({ botDisplayName: branding.botDisplayName, botName: branding.botName, title: branding.title }), [branding]);
+  const stepVars = useMemo(() => ({ botDisplayName: branding.botDisplayName, botName: branding.botName, title: branding.title, origin: window.location.origin }), [branding]);
   const canWorkspace = !!data?.canConnectWorkspace;
   // Solo is a team of one: the connection is simply the owner's — one view, no People.
   const solo = me?.teamMode === false;
@@ -496,6 +555,9 @@ export default function IntegrationPage({ id, sidebarOpen }) {
         meta={tabs.length > 1 ? <Tabs value={current} onChange={setTab} items={tabs} /> : null} />
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="flex flex-col gap-6 px-4 pb-12 pt-4 sm:px-6">
+          {integration.appClient && canWorkspace && current !== 'people' && (
+            <AppClientCard key={`app-${integration.appClient.clientId || ''}`} integration={integration} onChanged={onChanged} toast={toast} />
+          )}
           {current === 'team' && (
             <ConnectionCard key={`team-${!!integration.workspace}`} integration={integration} reach="workspace" solo={solo} detail={integration.workspace} canManage={canWorkspace} onChanged={onChanged} toast={toast} stepVars={stepVars} botName={branding.botDisplayName} />
           )}

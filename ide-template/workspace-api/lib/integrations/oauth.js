@@ -34,6 +34,7 @@ import { PROJECT_DIR } from '../config.js';
 import * as catalog from './catalog.js';
 import * as store from './store.js';
 import { resolve as resolveBranding } from '../branding.js';
+import { encryptValue, decryptValue } from './crypto.js';
 
 // Name shown on the provider's OAuth consent screen ("<name> wants access").
 // Use the workspace's own bot name, not a hardcoded product name.
@@ -94,6 +95,64 @@ function writeClients(all) {
   try { chmodSync(CLIENTS_TMP, 0o600); } catch {}
   renameSync(CLIENTS_TMP, CLIENTS_FILE);
   try { chmodSync(CLIENTS_FILE, 0o600); } catch {}
+}
+
+// ─── the provider's own developer app (`mcp.oauthClient: "app"`) ────────────
+//
+// Some providers allow neither dynamic registration nor metadata documents for
+// a redirect on this workspace's domain (Canva's Connect MCP: registration is
+// closed, its authorization server wants a client id and secret). The admin
+// creates the provider's developer app once, with this domain's callback as its
+// redirect URL, and types its client id and secret on the integration's page.
+// They live in the clients file under the integration's id, the secret
+// AES-GCM-encrypted with the store's key; every connection of the integration
+// — the workspace's and each person's own — signs in through that one app.
+
+const APP = 'app';
+export const usesAppClient = (cat) => cat?.mcp?.oauthClient === APP;
+
+function appClientFor(id) {
+  const rec = readClients()[catalog.baseId(id)];
+  if (!rec?.app || !rec.client_id || !rec.client_secret_enc) return undefined;
+  return { client_id: rec.client_id, client_secret: decryptValue(rec.client_secret_enc) };
+}
+
+/** Whether the app is set up, and (for an admin) its client id. Never the secret. */
+export function appClientStatus(id, { admin = false } = {}) {
+  const rec = readClients()[catalog.baseId(id)];
+  const configured = Boolean(rec?.app && rec.client_id && rec.client_secret_enc);
+  return { configured, ...(admin && configured ? { clientId: rec.client_id } : {}) };
+}
+
+/** Store the app's credentials. A blank secret keeps the stored one (changing only the id). */
+export function setAppClient(id, { clientId, clientSecret } = {}) {
+  const base = catalog.baseId(id);
+  if (!usesAppClient(catalog.get(base))) throw new Error(`${base} does not use its own developer app`);
+  const cid = String(clientId ?? '').trim();
+  const secret = String(clientSecret ?? '').trim();
+  if (!/^[\x21-\x7e]{4,200}$/.test(cid)) throw new Error('The client ID looks wrong: 4–200 visible characters, no spaces.');
+  if (secret && !/^[\x21-\x7e]{8,500}$/.test(secret)) throw new Error('The client secret looks wrong: 8–500 visible characters, no spaces.');
+  const all = readClients();
+  const prev = all[base]?.app ? all[base] : null;
+  if (!secret && !prev?.client_secret_enc) throw new Error('Add the client secret too.');
+  all[base] = {
+    app: true,
+    client_id: cid,
+    client_secret_enc: secret ? encryptValue(secret) : prev.client_secret_enc,
+    updated_at: new Date().toISOString(),
+  };
+  writeClients(all);
+  return appClientStatus(base, { admin: true });
+}
+
+/** Remove the app's credentials (an admin's explicit choice; disconnecting never does). */
+export function forgetAppClient(id) {
+  const base = catalog.baseId(id);
+  const all = readClients();
+  if (!all[base]?.app) return false;
+  delete all[base];
+  writeClients(all);
+  return true;
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -160,6 +219,7 @@ export function clientMetadataDocument(baseUrl) {
  * registering exactly as before.
  */
 function makeProvider(id, redirectUrl, flow, metadataUrl = null) {
+  const app = usesAppClient(catalog.get(id));
   return {
     get redirectUrl() { return redirectUrl; },
     get clientMetadata() { return clientMetadataFor(redirectUrl); },
@@ -174,6 +234,7 @@ function makeProvider(id, redirectUrl, flow, metadataUrl = null) {
     // the cause is a stale client_id. Returning undefined makes the SDK
     // register again, which is cheap and idempotent.
     clientInformation: () => {
+      if (app) return appClientFor(id);
       const info = readClients()[id];
       if (!info) return undefined;
       // A URL-based client id is valid exactly while it is this deployment's document.
@@ -187,6 +248,7 @@ function makeProvider(id, redirectUrl, flow, metadataUrl = null) {
       return undefined;
     },
     saveClientInformation: (info) => {
+      if (app) return;   // the admin's app is never replaced by a registration
       const all = readClients();
       all[id] = info;
       writeClients(all);
@@ -225,6 +287,9 @@ export async function startAuth(id, baseUrl, { owner = null, reach = 'workspace'
   if (reach === 'personal' && !owner) throw new Error('a personal connection needs its owner');
   if (reach === 'personal' && !cat.personal) throw new Error(`${cat.label} can only be connected for the workspace`);
   sweepPending();
+  if (usesAppClient(cat) && !appClientFor(id)) {
+    throw Object.assign(new Error(`${cat.label}'s app is not set up yet: an admin adds its client ID and secret on the ${cat.label} page in Integrations.`), { code: 'app_client_missing' });
+  }
 
   const redirectUrl = `${baseUrl.replace(/\/$/, '')}/api/integrations/oauth/callback`;
   const metadataUrl = cat.mcp.clientIdMetadata === true ? clientMetadataDocument(baseUrl).client_id : null;
@@ -312,7 +377,7 @@ export async function getFreshToken(id) {
       const cat = catFor(id);
       const { asUrl, metadata } = await authServerFor(cat.mcp.url);
       // The DCR client is the integration's, shared by every connection of it.
-      const clientInformation = readClients()[catalog.baseId(id)];
+      const clientInformation = usesAppClient(cat) ? appClientFor(id) : readClients()[catalog.baseId(id)];
       if (!clientInformation) {
         throw Object.assign(new Error(`${id} has no registered OAuth client`), { code: 'reauth_required' });
       }
@@ -349,5 +414,6 @@ export async function getFreshToken(id) {
 /** Drop the DCR client registration for an integration (on DELETE). */
 export function forgetClient(id) {
   const all = readClients();
+  if (all[id]?.app) return;   // the admin's app outlives its connections
   if (all[id]) { delete all[id]; writeClients(all); }
 }
