@@ -121,6 +121,7 @@ it works. `open` = no auth at all (keyless hosted server, instant-activate).
 | **Cal.com** | Bookings and availability | OAuth |
 | **ClickUp** | Tasks, docs, time tracking | OAuth |
 | **Calendly** | Scheduling and invitees | OAuth |
+| **Canva** | Designs, folders, comments, exports; create and edit designs (write tools listed in `writeTools`, so read-only blocks every change) | OAuth |
 | **Cloudflare** | Workers, KV, R2, D1 | OAuth |
 | **Crypto.com** | Crypto prices and charts | open |
 | **DeepL** | Translate, rewrite, glossaries | OAuth |

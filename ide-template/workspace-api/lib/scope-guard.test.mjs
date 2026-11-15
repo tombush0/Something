@@ -113,6 +113,12 @@ writeFileSync(join(ROOT, '.team', 'integration-access.json'), JSON.stringify({ e
 ok('a tool the catalog lists as a write is refused', mcp('mcp__elevenlabs__creative_generate_speech') === 2 && mcp('mcp__elevenlabs__agents_run_tests') === 2);
 ok('...and one the name gives away still is', mcp('mcp__elevenlabs__agents_delete') === 2 && mcp('mcp__elevenlabs__agents_update_prompt_settings') === 2);
 ok('...while reading passes', mcp('mcp__elevenlabs__agents_list_conversations') === 0 && mcp('mcp__elevenlabs__creative_list_voices') === 0);
+// Canva edits through a transaction whose steps say nothing about writing.
+writeFileSync(join(ROOT, '.team', 'integration-access.json'), JSON.stringify({ canva: 'read' }));
+ok('a read-only Canva refuses its editing steps', mcp('mcp__canva__start-editing-transaction') === 2 && mcp('mcp__canva__perform-editing-operations') === 2
+  && mcp('mcp__canva__commit-editing-transaction') === 2 && mcp('mcp__canva__comment-on-design') === 2 && mcp('mcp__canva__generate-design') === 2);
+ok('...while browsing and exporting pass', mcp('mcp__canva__search-designs') === 0 && mcp('mcp__canva__get-design-content') === 0
+  && mcp('mcp__canva__get-design-thumbnail') === 0 && mcp('mcp__canva__export-design') === 0 && mcp('mcp__canva__list-comments') === 0);
 rmSync(join(ROOT, '.team', 'integration-access.json'));
 // ─── the team's skills and instructions: an admin's ──────────────────────────
 const writeTo = (file_path, env) => run('Write', { file_path, content: 'x' }, env);

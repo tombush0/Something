@@ -1276,6 +1276,54 @@
       "beta": false
     },
     {
+      "id": "canva",
+      "label": "Canva",
+      "logo": "/integrations/canva.svg",
+      "description": "Designs, folders, comments and assets through Canva's official MCP server: find and read designs, then create, edit and export them. Set it to read only to browse without changes.",
+      "category": "content",
+      "fields": [
+        {
+          "name": "OAUTH_TOKENS",
+          "label": "Canva connection",
+          "type": "remote-mcp-oauth"
+        }
+      ],
+      "mcp": {
+        "type": "http",
+        "url": "https://mcp.canva.com/mcp",
+        "name": "canva",
+        "allowedHosts": [
+          "mcp.canva.com"
+        ]
+      },
+      "writeTools": [
+        "create-design",
+        "generate-design",
+        "create-design-from-candidate",
+        "create-design-from-brand-template",
+        "copy-design",
+        "merge-designs",
+        "import-design-from-url",
+        "start-editing-transaction",
+        "perform-editing-operations",
+        "commit-editing-transaction",
+        "resize-design",
+        "autofill-design",
+        "create-brand-template-draft",
+        "publish-brand-template",
+        "upload-asset-from-url",
+        "create-upload-url",
+        "generate-image",
+        "remove-background",
+        "separate-image-layers",
+        "comment-on-design",
+        "reply-to-comment",
+        "create-folder",
+        "move-item-to-folder"
+      ],
+      "tagline": "Designs, folders, exports"
+    },
+    {
       "id": "calcom",
       "label": "Cal.com",
       "logo": "/integrations/calcom.svg",

@@ -170,7 +170,7 @@ ide-template/skills/
     ├── shopify/{catalog-sync,edits,orders,products,store}/
     ├── signwell-protocol/                     ← e-signature workflow
     ├── email-imap/                            ← reading mail (pairs with email-write-protocol)
-    ├── <one folder per hosted integration>/   ← notion, linear, todoist, monday, airtable, clickup, atlassian, miro,
+    ├── <one folder per hosted integration>/   ← notion, linear, todoist, monday, airtable, clickup, atlassian, miro, canva,
     │                                            calcom, calendly, granola, tally, stripe, paypal, klaviyo,
     │                                            mailchimp, wix, webflow, github, sentry, supabase, neon, netlify, vercel,
     │                                            cloudflare, amplitude, ga4, zapier, deepl, elevenlabs,
